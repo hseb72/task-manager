@@ -155,6 +155,9 @@ export class RefsPageComponent implements OnInit {
   changeServiceEntite(v: ServiceRef, ev: Event) {
     this.patch(v.id, { entite_id: this.numOrNull(ev) });
   }
+  changeServiceEntiteModel(v: ServiceRef, entiteId: number | null) {
+    this.patch(v.id, { entite_id: entiteId });
+  }
 
   // Contact
   renameContact(v: ContactRef, ev: Event) {
@@ -167,6 +170,9 @@ export class RefsPageComponent implements OnInit {
   }
   changeContactService(v: ContactRef, ev: Event) {
     this.patch(v.id, { service_id: this.numOrNull(ev) });
+  }
+  changeContactServiceModel(v: ContactRef, serviceId: number | null) {
+    this.patch(v.id, { service_id: serviceId });
   }
 
   // Commun

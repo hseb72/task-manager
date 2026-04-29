@@ -47,21 +47,23 @@
             </td>
 
             <td>
-              <select class="cell-select" [value]="t.etatId ?? ''"
-                      (change)="onTacheRef(t, 'etatId', $event)">
-                <option value="">—</option>
+              <select class="cell-select"
+                      [ngModel]="t.etatId"
+                      (ngModelChange)="onTacheRefModel(t, 'etatId', $event)">
+                <option [ngValue]="null">—</option>
                 @for (v of refs.etats(); track v.id) {
-                  <option [value]="v.id">{{ v.libelle }}</option>
+                  <option [ngValue]="v.id">{{ v.libelle }}</option>
                 }
               </select>
             </td>
 
             <td>
-              <select class="cell-select" [value]="t.demandeurId ?? ''"
-                      (change)="onTacheRef(t, 'demandeurId', $event)">
-                <option value="">—</option>
+              <select class="cell-select"
+                      [ngModel]="t.demandeurId"
+                      (ngModelChange)="onTacheRefModel(t, 'demandeurId', $event)">
+                <option [ngValue]="null">—</option>
                 @for (c of refs.contacts(); track c.id) {
-                  <option [value]="c.id">{{ c.nom }}</option>
+                  <option [ngValue]="c.id">{{ c.nom }}</option>
                 }
               </select>
             </td>
@@ -71,11 +73,12 @@
             <td class="muted">{{ t.demandeurEntite ?? '—' }}</td>
 
             <td>
-              <select class="cell-select" [value]="t.domaineId ?? ''"
-                      (change)="onTacheRef(t, 'domaineId', $event)">
-                <option value="">—</option>
+              <select class="cell-select"
+                      [ngModel]="t.domaineId"
+                      (ngModelChange)="onTacheRefModel(t, 'domaineId', $event)">
+                <option [ngValue]="null">—</option>
                 @for (v of refs.domaines(); track v.id) {
-                  <option [value]="v.id">{{ v.libelle }}</option>
+                  <option [ngValue]="v.id">{{ v.libelle }}</option>
                 }
               </select>
             </td>
@@ -180,10 +183,11 @@
 
           <div class="row gap-sm mb-2">
             <select class="cell-select" style="border: 1px solid var(--line); flex: 1"
-                    [value]="contactToAdd() ?? ''" (change)="onContactToAddChange($event)">
-              <option value="">— choisir un contact à ajouter —</option>
+                    [ngModel]="contactToAdd()"
+                    (ngModelChange)="contactToAdd.set($event)">
+              <option [ngValue]="null">— choisir un contact à ajouter —</option>
               @for (c of availableContacts(); track c.id) {
-                <option [value]="c.id">
+                <option [ngValue]="c.id">
                   {{ c.nom }}@if (c.service_libelle) { — {{ c.service_libelle }} }
                 </option>
               }

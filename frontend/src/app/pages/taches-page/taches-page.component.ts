@@ -89,27 +89,48 @@ export class TachesPageComponent implements OnInit {
   onTacheRef(tache: Tache, field: keyof Tache, ev: Event) {
     this.applyTachePatch(tache, field, this.numOrNull(ev));
   }
+  /** Variante appelée par (ngModelChange) — la valeur est déjà typée, pas besoin d'extraire. */
+  onTacheRefModel(tache: Tache, field: keyof Tache, value: number | null) {
+    this.applyTachePatch(tache, field, value);
+  }
   onTacheDescription(tache: Tache, ev: Event) {
-    const v = this.valOrNull(ev);
-    this.applyTachePatch(tache, 'description', v);
-    if (this.selected()?.id === tache.id) {
-      this.selected.set({ ...this.selected()!, description: v });
-    }
+    this.applyTachePatch(tache, 'description', this.valOrNull(ev));
   }
 
   private applyTachePatch(tache: Tache, field: keyof Tache, value: unknown) {
-    (tache as any)[field] = value;
+    // Sauvegarde de l'ancienne valeur pour rollback éventuel
+    const previous = (tache as any)[field];
+
+    // Mise à jour optimiste : on remplace l'objet dans le signal pour
+    // forcer la détection de changement et la re-synchro des selects.
+    const updateLocally = (patch: Partial<Tache>) => {
+      const arr = this.taches().map(x =>
+        x.id === tache.id ? { ...x, ...patch } : x
+      );
+      this.taches.set(arr);
+      // Si la tâche est ouverte dans le panneau de détails, le rafraîchir aussi
+      if (this.selected()?.id === tache.id) {
+        this.selected.set({ ...this.selected()!, ...patch });
+      }
+    };
+
+    updateLocally({ [field]: value } as Partial<Tache>);
+
     const patch: Partial<Tache> = { [field]: value } as Partial<Tache>;
     this.tacheSrv.update(tache.id, patch).subscribe({
       next: updated => {
-        const idx = this.taches().findIndex(x => x.id === tache.id);
-        if (idx >= 0) {
-          const arr = [...this.taches()];
-          arr[idx] = { ...arr[idx], ...updated };
-          this.taches.set(arr);
+        // On remplace par la version serveur (libellés joints à jour, etc.)
+        const arr = this.taches().map(x => (x.id === tache.id ? { ...x, ...updated } : x));
+        this.taches.set(arr);
+        if (this.selected()?.id === tache.id) {
+          this.selected.set({ ...this.selected()!, ...updated });
         }
       },
-      error: err => console.error('Mise à jour échouée', err),
+      error: err => {
+        console.error('Mise à jour échouée', err);
+        // Rollback de la valeur affichée
+        updateLocally({ [field]: previous } as Partial<Tache>);
+      },
     });
   }
 
@@ -183,10 +204,6 @@ export class TachesPageComponent implements OnInit {
   /* ====================================================================== */
   /*  Contacts associés (référentiel)                                        */
   /* ====================================================================== */
-
-  onContactToAddChange(ev: Event) {
-    this.contactToAdd.set(this.numOrNull(ev));
-  }
 
   linkContact() {
     const t = this.selected();

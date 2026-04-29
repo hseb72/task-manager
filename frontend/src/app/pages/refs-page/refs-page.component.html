@@ -43,12 +43,12 @@
                    [value]="newServiceLibelle()"
                    (input)="setAddField('serviceLibelle', $event)"
                    (keydown.enter)="add()">
-            <select [value]="newServiceEntiteId() ?? ''"
-                    (change)="setAddField('serviceEntite', $event)"
+            <select [ngModel]="newServiceEntiteId()"
+                    (ngModelChange)="newServiceEntiteId.set($event)"
                     style="border: 1px solid var(--line); max-width: 220px">
-              <option value="">— entité —</option>
+              <option [ngValue]="null">— entité —</option>
               @for (e of refs.entites(); track e.id) {
-                <option [value]="e.id">{{ e.libelle }}</option>
+                <option [ngValue]="e.id">{{ e.libelle }}</option>
               }
             </select>
             <button class="btn primary" (click)="add()">Ajouter</button>
@@ -62,12 +62,12 @@
             <input placeholder="Rôle"
                    [value]="newContactRole()"
                    (input)="setAddField('contactRole', $event)">
-            <select [value]="newContactServiceId() ?? ''"
-                    (change)="setAddField('contactService', $event)"
+            <select [ngModel]="newContactServiceId()"
+                    (ngModelChange)="newContactServiceId.set($event)"
                     style="border: 1px solid var(--line)">
-              <option value="">— service —</option>
+              <option [ngValue]="null">— service —</option>
               @for (s of refs.services(); track s.id) {
-                <option [value]="s.id">
+                <option [ngValue]="s.id">
                   {{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }
                 </option>
               }
@@ -144,11 +144,12 @@
                              (change)="renameService(v, $event)">
                     </td>
                     <td>
-                      <select class="cell-select" [value]="v.entite_id ?? ''"
-                              (change)="changeServiceEntite(v, $event)">
-                        <option value="">—</option>
+                      <select class="cell-select"
+                              [ngModel]="v.entite_id"
+                              (ngModelChange)="changeServiceEntiteModel(v, $event)">
+                        <option [ngValue]="null">—</option>
                         @for (e of refs.entites(); track e.id) {
-                          <option [value]="e.id">{{ e.libelle }}</option>
+                          <option [ngValue]="e.id">{{ e.libelle }}</option>
                         }
                       </select>
                     </td>
@@ -192,11 +193,12 @@
                              (change)="changeContactField(v, 'role', $event)">
                     </td>
                     <td>
-                      <select class="cell-select" [value]="v.service_id ?? ''"
-                              (change)="changeContactService(v, $event)">
-                        <option value="">—</option>
+                      <select class="cell-select"
+                              [ngModel]="v.service_id"
+                              (ngModelChange)="changeContactServiceModel(v, $event)">
+                        <option [ngValue]="null">—</option>
                         @for (s of refs.services(); track s.id) {
-                          <option [value]="s.id">
+                          <option [ngValue]="s.id">
                             {{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }
                           </option>
                         }
