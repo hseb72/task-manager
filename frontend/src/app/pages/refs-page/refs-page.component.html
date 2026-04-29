@@ -1,0 +1,230 @@
+<div class="page-header">
+  <div>
+    <h1>Référentiels</h1>
+    <div class="lead">Gestion des valeurs des listes déroulantes utilisées par les tâches.</div>
+  </div>
+</div>
+
+<div class="refs-layout">
+  <aside class="refs-side">
+    <div class="side-title">Listes</div>
+    <nav class="side-nav">
+      @for (t of refs.tables(); track t.name) {
+        <a [routerLink]="['/referentiels', t.name]" routerLinkActive="active">
+          <span>{{ t.label }}</span>
+          <span class="count mono">
+            @if (t.name === current()) {{{ values().length }}}
+          </span>
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <section class="refs-main">
+    <div class="card">
+      <h3>{{ currentLabel() }}</h3>
+
+      <!-- ============================================================== -->
+      <!-- Zone d'ajout, variant selon le type                              -->
+      <!-- ============================================================== -->
+      @switch (kind()) {
+        @case ('simple') {
+          <div class="row gap-sm mb-2">
+            <input placeholder="Nouvelle valeur…"
+                   [value]="newSimpleLibelle()"
+                   (input)="setAddField('simpleLibelle', $event)"
+                   (keydown.enter)="add()">
+            <button class="btn primary" (click)="add()">Ajouter</button>
+          </div>
+        }
+        @case ('service') {
+          <div class="row gap-sm mb-2">
+            <input placeholder="Libellé du service…"
+                   [value]="newServiceLibelle()"
+                   (input)="setAddField('serviceLibelle', $event)"
+                   (keydown.enter)="add()">
+            <select [value]="newServiceEntiteId() ?? ''"
+                    (change)="setAddField('serviceEntite', $event)"
+                    style="border: 1px solid var(--line); max-width: 220px">
+              <option value="">— entité —</option>
+              @for (e of refs.entites(); track e.id) {
+                <option [value]="e.id">{{ e.libelle }}</option>
+              }
+            </select>
+            <button class="btn primary" (click)="add()">Ajouter</button>
+          </div>
+        }
+        @case ('contact') {
+          <div class="grid-3 mb-2">
+            <input placeholder="Nom *"
+                   [value]="newContactNom()"
+                   (input)="setAddField('contactNom', $event)">
+            <input placeholder="Rôle"
+                   [value]="newContactRole()"
+                   (input)="setAddField('contactRole', $event)">
+            <select [value]="newContactServiceId() ?? ''"
+                    (change)="setAddField('contactService', $event)"
+                    style="border: 1px solid var(--line)">
+              <option value="">— service —</option>
+              @for (s of refs.services(); track s.id) {
+                <option [value]="s.id">
+                  {{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }
+                </option>
+              }
+            </select>
+            <input type="email" placeholder="Email"
+                   [value]="newContactEmail()"
+                   (input)="setAddField('contactEmail', $event)">
+            <input placeholder="Téléphone"
+                   [value]="newContactTelephone()"
+                   (input)="setAddField('contactTelephone', $event)">
+            <button class="btn primary" (click)="add()">Ajouter</button>
+          </div>
+        }
+      }
+
+      @if (errorMsg()) {
+        <div class="empty-state" style="color: var(--danger); padding: 0.5rem">{{ errorMsg() }}</div>
+      }
+
+      @if (values().length === 0) {
+        <div class="empty-state">Aucune valeur dans cette liste.</div>
+      } @else {
+        <!-- ============================================================ -->
+        <!-- Tableau, variant selon le type                                -->
+        <!-- ============================================================ -->
+        @switch (kind()) {
+          @case ('simple') {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px">ID</th>
+                  <th>Libellé</th>
+                  <th style="width: 120px">État</th>
+                  <th style="width: 80px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of asSimple(); track trackById($index, v)) {
+                  <tr>
+                    <td class="id-col">#{{ v.id }}</td>
+                    <td>
+                      <input class="cell-input" [value]="v.libelle"
+                             (change)="renameSimple(v, $event)">
+                    </td>
+                    <td>
+                      <button class="btn tight" (click)="toggleActif(v)">
+                        @if (v.actif) {<span class="badge ok">Actif</span>}
+                        @else {<span class="badge">Inactif</span>}
+                      </button>
+                    </td>
+                    <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('service') {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px">ID</th>
+                  <th>Libellé</th>
+                  <th style="min-width: 180px">Entité</th>
+                  <th style="width: 120px">État</th>
+                  <th style="width: 80px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of asServices(); track trackById($index, v)) {
+                  <tr>
+                    <td class="id-col">#{{ v.id }}</td>
+                    <td>
+                      <input class="cell-input" [value]="v.libelle"
+                             (change)="renameService(v, $event)">
+                    </td>
+                    <td>
+                      <select class="cell-select" [value]="v.entite_id ?? ''"
+                              (change)="changeServiceEntite(v, $event)">
+                        <option value="">—</option>
+                        @for (e of refs.entites(); track e.id) {
+                          <option [value]="e.id">{{ e.libelle }}</option>
+                        }
+                      </select>
+                    </td>
+                    <td>
+                      <button class="btn tight" (click)="toggleActif(v)">
+                        @if (v.actif) {<span class="badge ok">Actif</span>}
+                        @else {<span class="badge">Inactif</span>}
+                      </button>
+                    </td>
+                    <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('contact') {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px">ID</th>
+                  <th style="min-width: 160px">Nom</th>
+                  <th>Rôle</th>
+                  <th style="min-width: 180px">Service</th>
+                  <th>Entité</th>
+                  <th>Email</th>
+                  <th>Téléphone</th>
+                  <th style="width: 100px">État</th>
+                  <th style="width: 60px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of asContacts(); track trackById($index, v)) {
+                  <tr>
+                    <td class="id-col">#{{ v.id }}</td>
+                    <td>
+                      <input class="cell-input" [value]="v.nom"
+                             (change)="renameContact(v, $event)">
+                    </td>
+                    <td>
+                      <input class="cell-input" [value]="v.role ?? ''"
+                             (change)="changeContactField(v, 'role', $event)">
+                    </td>
+                    <td>
+                      <select class="cell-select" [value]="v.service_id ?? ''"
+                              (change)="changeContactService(v, $event)">
+                        <option value="">—</option>
+                        @for (s of refs.services(); track s.id) {
+                          <option [value]="s.id">
+                            {{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }
+                          </option>
+                        }
+                      </select>
+                    </td>
+                    <td class="muted">{{ v.entite_libelle ?? '—' }}</td>
+                    <td>
+                      <input type="email" class="cell-input" [value]="v.email ?? ''"
+                             (change)="changeContactField(v, 'email', $event)">
+                    </td>
+                    <td>
+                      <input class="cell-input mono" [value]="v.telephone ?? ''"
+                             (change)="changeContactField(v, 'telephone', $event)">
+                    </td>
+                    <td>
+                      <button class="btn tight" (click)="toggleActif(v)">
+                        @if (v.actif) {<span class="badge ok">Actif</span>}
+                        @else {<span class="badge">Inactif</span>}
+                      </button>
+                    </td>
+                    <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        }
+      }
+    </div>
+  </section>
+</div>

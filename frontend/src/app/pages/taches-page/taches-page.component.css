@@ -1,0 +1,13 @@
+/* Largeurs colonnes spécifiques */
+:host { display: block; }
+
+table.data-table input.cell-input,
+table.data-table select.cell-select {
+  min-width: 80px;
+}
+
+table.data-table td input[type="date"].cell-input {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  min-width: 120px;
+}

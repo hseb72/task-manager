@@ -1,0 +1,239 @@
+<div class="page-header">
+  <div>
+    <h1>Tâches en cours</h1>
+    <div class="lead">{{ filtered().length }} tâche(s) — édition directe dans le tableau, détails et pièces jointes via la loupe.</div>
+  </div>
+  <div class="row gap-sm">
+    <input type="search" placeholder="Rechercher…" style="width: 220px"
+           [ngModel]="filterText()" (ngModelChange)="filterText.set($event)">
+    <button class="btn primary" (click)="createNew()">+ Nouvelle tâche</button>
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="empty-state">Chargement…</div>
+} @else if (error()) {
+  <div class="empty-state" style="color: var(--danger)">Erreur : {{ error() }}</div>
+} @else if (filtered().length === 0) {
+  <div class="empty-state">Aucune tâche à afficher.</div>
+} @else {
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th style="min-width: 220px">Libellé</th>
+          <th>État</th>
+          <th>Demandeur</th>
+          <th>Service</th>
+          <th>Entité</th>
+          <th>Domaine</th>
+          <th>Déclaration</th>
+          <th>Échéance</th>
+          <th>Fin</th>
+          <th class="text-right">Prévue (h)</th>
+          <th class="text-right">Faite (h)</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of filtered(); track trackById($index, t)) {
+          <tr>
+            <td class="id-col">#{{ t.id }}</td>
+
+            <td>
+              <input class="cell-input" [value]="t.libelle"
+                     (change)="onTacheText(t, 'libelle', $event)">
+            </td>
+
+            <td>
+              <select class="cell-select" [value]="t.etatId ?? ''"
+                      (change)="onTacheRef(t, 'etatId', $event)">
+                <option value="">—</option>
+                @for (v of refs.etats(); track v.id) {
+                  <option [value]="v.id">{{ v.libelle }}</option>
+                }
+              </select>
+            </td>
+
+            <td>
+              <select class="cell-select" [value]="t.demandeurId ?? ''"
+                      (change)="onTacheRef(t, 'demandeurId', $event)">
+                <option value="">—</option>
+                @for (c of refs.contacts(); track c.id) {
+                  <option [value]="c.id">{{ c.nom }}</option>
+                }
+              </select>
+            </td>
+
+            <!-- Service et Entité dérivés du demandeur (lecture seule) -->
+            <td class="muted">{{ t.demandeurService ?? '—' }}</td>
+            <td class="muted">{{ t.demandeurEntite ?? '—' }}</td>
+
+            <td>
+              <select class="cell-select" [value]="t.domaineId ?? ''"
+                      (change)="onTacheRef(t, 'domaineId', $event)">
+                <option value="">—</option>
+                @for (v of refs.domaines(); track v.id) {
+                  <option [value]="v.id">{{ v.libelle }}</option>
+                }
+              </select>
+            </td>
+
+            <td>
+              <input type="date" class="cell-input" [value]="t.dateDeclaration ?? ''"
+                     (change)="onTacheText(t, 'dateDeclaration', $event)">
+            </td>
+            <td>
+              <input type="date" class="cell-input" [value]="t.dateEcheance ?? ''"
+                     (change)="onTacheText(t, 'dateEcheance', $event)">
+            </td>
+            <td>
+              <input type="date" class="cell-input" [value]="t.dateFin ?? ''"
+                     (change)="onTacheText(t, 'dateFin', $event)">
+            </td>
+
+            <td class="text-right">
+              <input type="number" step="0.5" class="cell-input mono text-right" style="max-width: 80px"
+                     [value]="t.dureePrevue ?? ''"
+                     (change)="onTacheNumber(t, 'dureePrevue', $event)">
+            </td>
+            <td class="text-right">
+              <input type="number" step="0.5" class="cell-input mono text-right" style="max-width: 80px"
+                     [value]="t.dureeAccomplie ?? ''"
+                     (change)="onTacheNumber(t, 'dureeAccomplie', $event)">
+            </td>
+
+            <td class="actions-col">
+              <button class="icon-btn" title="Détails" (click)="openDetails(t)">⋯</button>
+              <button class="icon-btn danger" title="Supprimer" (click)="delete(t, $event)">✕</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+}
+
+@if (selected(); as t) {
+  <div class="modal-backdrop" (click)="closeDetails()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <div>
+          <div class="muted mono" style="font-size: 0.75rem">Tâche #{{ t.id }}</div>
+          <h2>{{ t.libelle }}</h2>
+        </div>
+        <button class="icon-btn" (click)="closeDetails()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="card" style="box-shadow: none; padding: 0; border: none">
+          <label>Description</label>
+          <textarea rows="3" [value]="t.description ?? ''"
+                    (change)="onTacheDescription(t, $event)"></textarea>
+        </div>
+
+        <div class="card mt-2">
+          <h3 class="row" style="justify-content: space-between">
+            <span>Actions menées</span>
+            <button class="btn" (click)="addAction()">+ Ajouter une action</button>
+          </h3>
+          @if ((t.actions ?? []).length === 0) {
+            <div class="empty-state">Aucune action enregistrée.</div>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 130px">Date</th>
+                  <th style="min-width: 180px">Libellé</th>
+                  <th>Description</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of t.actions ?? []; track a.id) {
+                  <tr>
+                    <td>
+                      <input type="date" class="cell-input" [value]="a.date_action ?? ''"
+                             (change)="onActionField(a, 'date_action', $event)">
+                    </td>
+                    <td>
+                      <input class="cell-input" [value]="a.libelle"
+                             (change)="onActionField(a, 'libelle', $event)">
+                    </td>
+                    <td>
+                      <input class="cell-input" [value]="a.description ?? ''"
+                             (change)="onActionField(a, 'description', $event)">
+                    </td>
+                    <td><button class="icon-btn danger" (click)="deleteAction(a)">✕</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+
+        <div class="card mt-2">
+          <h3 class="row" style="justify-content: space-between">
+            <span>Contacts liés</span>
+          </h3>
+
+          <div class="row gap-sm mb-2">
+            <select class="cell-select" style="border: 1px solid var(--line); flex: 1"
+                    [value]="contactToAdd() ?? ''" (change)="onContactToAddChange($event)">
+              <option value="">— choisir un contact à ajouter —</option>
+              @for (c of availableContacts(); track c.id) {
+                <option [value]="c.id">
+                  {{ c.nom }}@if (c.service_libelle) { — {{ c.service_libelle }} }
+                </option>
+              }
+            </select>
+            <button class="btn primary" (click)="linkContact()" [disabled]="!contactToAdd()">
+              Ajouter
+            </button>
+          </div>
+
+          @if ((t.contacts ?? []).length === 0) {
+            <div class="empty-state">Aucun contact lié.</div>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="min-width: 160px">Nom</th>
+                  <th>Rôle</th>
+                  <th>Service</th>
+                  <th>Entité</th>
+                  <th>Email</th>
+                  <th>Téléphone</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (c of t.contacts ?? []; track c.id) {
+                  <tr>
+                    <td>{{ c.nom }}</td>
+                    <td class="muted">{{ c.role ?? '—' }}</td>
+                    <td class="muted">{{ c.service_libelle ?? '—' }}</td>
+                    <td class="muted">{{ c.entite_libelle ?? '—' }}</td>
+                    <td class="muted">{{ c.email ?? '—' }}</td>
+                    <td class="muted mono">{{ c.telephone ?? '—' }}</td>
+                    <td>
+                      <button class="icon-btn danger" title="Détacher" (click)="unlinkContact(c)">✕</button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <div class="muted mt-1" style="font-size: 0.78rem; font-style: italic">
+              Détacher un contact ne le supprime pas du référentiel.
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn" (click)="closeDetails()">Fermer</button>
+      </div>
+    </div>
+  </div>
+}
