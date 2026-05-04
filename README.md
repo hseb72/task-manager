@@ -71,6 +71,10 @@ si une valeur de référentiel est supprimée, la tâche conserve son existence 
 
 #### Divers
 - `GET /api/health` — sonde de vie
+- `GET /api/export` — télécharge l'intégralité de la base au format `.json.gz`
+- `POST /api/import?mode=replace|merge` — restaure depuis un export. Body : binaire (`.json.gz` ou `.json`).
+  - `mode=replace` (défaut) : vide tout puis insère
+  - `mode=merge` : `INSERT OR REPLACE` (les conflits d'ID écrasent)
 
 ---
 
@@ -107,16 +111,35 @@ Les fichiers sont produits dans `dist/task-manager-frontend`.
 ### a) Page principale — `Tâches`
 Tableau dense de toutes les tâches en cours, avec édition directe des cellules :
 - Champs texte (libellé) éditables en place ;
-- Listes déroulantes (état, demandeur, entité, service, domaine) ;
+- Listes déroulantes (état, demandeur, domaine) ;
 - Champs date (déclaration, échéance, fin) ;
-- Champs numériques (durée prévue, durée accomplie).
+- Champs numériques (durée prévue, durée accomplie) ;
+- Service et Entité du demandeur affichés automatiquement.
 
-Chaque modification est envoyée au backend dès la perte de focus (`change`). Les boutons par ligne :
-- **⋯** ouvre un panneau détaillé avec :
-  - description longue,
-  - liste des actions menées (ajout/édition/suppression),
-  - liste des contacts (ajout/édition/suppression).
-- **✕** supprime la tâche.
+Chaque modification est envoyée au backend dès la perte de focus / changement.
+
+**Tri** : clic sur n'importe quel en-tête de colonne (sauf actions) — premier clic ascendant, deuxième descendant, indicateur ↑/↓.
+
+**Filtrage par colonne** : sous chaque en-tête, un filtre adapté au type :
+- texte (libellé) → contient
+- listes (état, demandeur, service, entité, domaine) → liste déroulante
+- dates → intervalle « du / au »
+- nombres (durées) → intervalle « min / max »
+- bouton ⟲ pour réinitialiser tous les filtres en une fois
+
+Un champ de **recherche globale** complète les filtres par colonne.
+
+**Pagination** : sélecteur 5 / 10 / 20 / 50 / Tout, boutons « ‹‹ ‹ 1 2 … 9 10 … N › ›› », libellé « X–Y sur Z ».
+
+**Import / Export** : un seul bouton avec menu déroulant (flèche ▾) regroupe trois actions :
+- **↓ Exporter** (action par défaut) : télécharge un `.json.gz` contenant toutes les tables
+- **↑ Remplacer** : importe un `.json.gz` (ou `.json`) en vidant la base d'abord. Confirmation requise. L'action choisie devient la nouvelle action par défaut du bouton
+- **↑ Fusionner** : importe en mode `INSERT OR REPLACE` (les enregistrements existants avec le même ID sont écrasés, les autres préservés)
+
+Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
+  - description longue éditable en **WYSIWYG** (gras, italique, souligné, listes, lien, etc.),
+  - liste des actions menées (date, libellé, et description WYSIWYG également) — ajout/édition/suppression,
+  - liste des contacts liés (ajout via le sélecteur du référentiel, retrait sans suppression du contact lui-même).
 
 ### b) Page `Référentiels`
 - Menu latéral pour basculer entre les référentiels.

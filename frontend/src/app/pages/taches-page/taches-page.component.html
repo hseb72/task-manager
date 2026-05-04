@@ -1,43 +1,165 @@
 <div class="page-header">
   <div>
     <h1>Tâches en cours</h1>
-    <div class="lead">{{ filtered().length }} tâche(s) — édition directe dans le tableau, détails et pièces jointes via la loupe.</div>
+    <div class="lead">{{ sorted().length }} tâche(s) — édition directe dans le tableau, détails et pièces jointes via la loupe.</div>
   </div>
   <div class="row gap-sm">
     <input type="search" placeholder="Rechercher…" style="width: 220px"
-           [ngModel]="filterText()" (ngModelChange)="filterText.set($event)">
+           [ngModel]="filterText()" (ngModelChange)="filterText.set($event); currentPage.set(1)">
+
+    <!-- Input file unique, déclenché selon l'action choisie -->
+    <input #fileInput type="file" accept=".gz,.json,.json.gz,application/gzip,application/json"
+           style="display: none" (change)="onFileSelected($event)">
+
+    <app-split-button
+      [actions]="transferActions"
+      defaultId="export"
+      (actionTriggered)="onTransferAction($event, fileInput)">
+    </app-split-button>
+
     <button class="btn primary" (click)="createNew()">+ Nouvelle tâche</button>
   </div>
 </div>
+
+@if (importMessage(); as msg) {
+  <div class="card mb-2" style="padding: 0.6rem 1rem; border-left: 3px solid var(--accent)">
+    {{ msg }}
+  </div>
+}
 
 @if (loading()) {
   <div class="empty-state">Chargement…</div>
 } @else if (error()) {
   <div class="empty-state" style="color: var(--danger)">Erreur : {{ error() }}</div>
-} @else if (filtered().length === 0) {
+} @else if (taches().length === 0) {
   <div class="empty-state">Aucune tâche à afficher.</div>
 } @else {
   <div class="table-wrap">
     <table class="data-table">
       <thead>
         <tr>
-          <th>ID</th>
-          <th style="min-width: 220px">Libellé</th>
-          <th>État</th>
-          <th>Demandeur</th>
-          <th>Service</th>
-          <th>Entité</th>
-          <th>Domaine</th>
-          <th>Déclaration</th>
-          <th>Échéance</th>
-          <th>Fin</th>
-          <th class="text-right">Prévue (h)</th>
-          <th class="text-right">Faite (h)</th>
+          <th class="sortable" (click)="toggleSort('id')">ID{{ sortIcon('id') }}</th>
+          <th class="sortable" style="min-width: 220px" (click)="toggleSort('libelle')">Libellé{{ sortIcon('libelle') }}</th>
+          <th class="sortable" (click)="toggleSort('etatLibelle')">État{{ sortIcon('etatLibelle') }}</th>
+          <th class="sortable" (click)="toggleSort('demandeurNom')">Demandeur{{ sortIcon('demandeurNom') }}</th>
+          <th class="sortable" (click)="toggleSort('demandeurService')">Service{{ sortIcon('demandeurService') }}</th>
+          <th class="sortable" (click)="toggleSort('demandeurEntite')">Entité{{ sortIcon('demandeurEntite') }}</th>
+          <th class="sortable" (click)="toggleSort('domaineLibelle')">Domaine{{ sortIcon('domaineLibelle') }}</th>
+          <th class="sortable" (click)="toggleSort('dateDeclaration')">Déclaration{{ sortIcon('dateDeclaration') }}</th>
+          <th class="sortable" (click)="toggleSort('dateEcheance')">Échéance{{ sortIcon('dateEcheance') }}</th>
+          <th class="sortable" (click)="toggleSort('dateFin')">Fin{{ sortIcon('dateFin') }}</th>
+          <th class="sortable text-right" (click)="toggleSort('dureePrevue')">Prévue (h){{ sortIcon('dureePrevue') }}</th>
+          <th class="sortable text-right" (click)="toggleSort('dureeAccomplie')">Faite (h){{ sortIcon('dureeAccomplie') }}</th>
           <th></th>
+        </tr>
+        <tr class="filter-row">
+          <th>
+            <input class="filter-input mono" placeholder="ID"
+                   [ngModel]="columnFilters().id"
+                   (ngModelChange)="setColumnFilter('id', $event)">
+          </th>
+          <th>
+            <input class="filter-input" placeholder="contient…"
+                   [ngModel]="columnFilters().libelle"
+                   (ngModelChange)="setColumnFilter('libelle', $event)">
+          </th>
+          <th>
+            <select class="filter-input"
+                    [ngModel]="columnFilters().etatId"
+                    (ngModelChange)="setColumnFilter('etatId', $event)">
+              <option [ngValue]="null">tous</option>
+              @for (v of refs.etats(); track v.id) {
+                <option [ngValue]="v.id">{{ v.libelle }}</option>
+              }
+            </select>
+          </th>
+          <th>
+            <select class="filter-input"
+                    [ngModel]="columnFilters().demandeurId"
+                    (ngModelChange)="setColumnFilter('demandeurId', $event)">
+              <option [ngValue]="null">tous</option>
+              @for (c of refs.contacts(); track c.id) {
+                <option [ngValue]="c.id">{{ c.nom }}</option>
+              }
+            </select>
+          </th>
+          <th>
+            <select class="filter-input"
+                    [ngModel]="columnFilters().demandeurServiceId"
+                    (ngModelChange)="setColumnFilter('demandeurServiceId', $event)">
+              <option [ngValue]="null">tous</option>
+              @for (s of refs.services(); track s.id) {
+                <option [ngValue]="s.id">{{ s.libelle }}</option>
+              }
+            </select>
+          </th>
+          <th>
+            <select class="filter-input"
+                    [ngModel]="columnFilters().demandeurEntiteId"
+                    (ngModelChange)="setColumnFilter('demandeurEntiteId', $event)">
+              <option [ngValue]="null">tous</option>
+              @for (e of refs.entites(); track e.id) {
+                <option [ngValue]="e.id">{{ e.libelle }}</option>
+              }
+            </select>
+          </th>
+          <th>
+            <select class="filter-input"
+                    [ngModel]="columnFilters().domaineId"
+                    (ngModelChange)="setColumnFilter('domaineId', $event)">
+              <option [ngValue]="null">tous</option>
+              @for (v of refs.domaines(); track v.id) {
+                <option [ngValue]="v.id">{{ v.libelle }}</option>
+              }
+            </select>
+          </th>
+          <th>
+            <input type="date" class="filter-input mono"
+                   [ngModel]="columnFilters().dateDeclaration"
+                   (ngModelChange)="setColumnFilter('dateDeclaration', $event)">
+          </th>
+          <th>
+            <input type="date" class="filter-input mono"
+                   [ngModel]="columnFilters().dateEcheance"
+                   (ngModelChange)="setColumnFilter('dateEcheance', $event)">
+          </th>
+          <th>
+            <input type="date" class="filter-input mono"
+                   [ngModel]="columnFilters().dateFin"
+                   (ngModelChange)="setColumnFilter('dateFin', $event)">
+          </th>
+          <th>
+            <input type="number" step="0.5" class="filter-input mono"
+                   [ngModel]="columnFilters().dureePrevue"
+                   (ngModelChange)="setColumnFilter('dureePrevue', $event)">
+          </th>
+          <th>
+            <input type="number" step="0.5" class="filter-input mono"
+                   [ngModel]="columnFilters().dureeAccomplie"
+                   (ngModelChange)="setColumnFilter('dureeAccomplie', $event)">
+          </th>
+          <th>
+            @if (hasColumnFilters()) {
+              <button class="icon-btn" title="Réinitialiser les filtres" (click)="resetColumnFilters()">⟲</button>
+            }
+          </th>
         </tr>
       </thead>
       <tbody>
-        @for (t of filtered(); track trackById($index, t)) {
+        @if (sorted().length === 0) {
+          <tr>
+            <td colspan="13" class="empty-state" style="padding: 1.4rem">
+              Aucune tâche ne correspond aux filtres actifs.
+              @if (hasColumnFilters() || filterText()) {
+                <button class="btn ghost" style="margin-left: 0.6rem"
+                        (click)="resetAllFilters()">
+                  Réinitialiser les filtres
+                </button>
+              }
+            </td>
+          </tr>
+        }
+        @for (t of paginated(); track trackById($index, t)) {
           <tr>
             <td class="id-col">#{{ t.id }}</td>
 
@@ -84,15 +206,15 @@
             </td>
 
             <td>
-              <input type="date" class="cell-input" [value]="t.dateDeclaration ?? ''"
+              <input type="date" class="cell-input" [value]="toIsoDate(t.dateDeclaration)"
                      (change)="onTacheText(t, 'dateDeclaration', $event)">
             </td>
             <td>
-              <input type="date" class="cell-input" [value]="t.dateEcheance ?? ''"
+              <input type="date" class="cell-input" [value]="toIsoDate(t.dateEcheance)"
                      (change)="onTacheText(t, 'dateEcheance', $event)">
             </td>
             <td>
-              <input type="date" class="cell-input" [value]="t.dateFin ?? ''"
+              <input type="date" class="cell-input" [value]="toIsoDate(t.dateFin)"
                      (change)="onTacheText(t, 'dateFin', $event)">
             </td>
 
@@ -116,6 +238,39 @@
       </tbody>
     </table>
   </div>
+
+  <div class="paginator">
+    <div class="paginator-left">
+      <label class="row gap-sm" style="margin-bottom: 0">
+        <span class="muted">Afficher</span>
+        <select [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)"
+                style="width: auto; min-width: 70px">
+          @for (n of pageOptions; track n) {
+            <option [ngValue]="n">{{ n === -1 ? 'Tout' : n }}</option>
+          }
+        </select>
+        <span class="muted">par page</span>
+      </label>
+    </div>
+
+    <div class="paginator-center muted">{{ rangeLabel() }}</div>
+
+    <div class="paginator-right">
+      <button class="icon-btn" (click)="firstPage()" [disabled]="currentPage() <= 1" title="Première page">«</button>
+      <button class="icon-btn" (click)="prevPage()"  [disabled]="currentPage() <= 1" title="Page précédente">‹</button>
+      @for (p of pageNumbers(); track $index) {
+        @if (p === 0) {
+          <span class="page-ellipsis">…</span>
+        } @else {
+          <button class="icon-btn page-btn"
+                  [class.current]="p === currentPage()"
+                  (click)="goToPage(p)">{{ p }}</button>
+        }
+      }
+      <button class="icon-btn" (click)="nextPage()" [disabled]="currentPage() >= pageCount()" title="Page suivante">›</button>
+      <button class="icon-btn" (click)="lastPage()" [disabled]="currentPage() >= pageCount()" title="Dernière page">»</button>
+    </div>
+  </div>
 }
 
 @if (selected(); as t) {
@@ -132,8 +287,10 @@
       <div class="modal-body">
         <div class="card" style="box-shadow: none; padding: 0; border: none">
           <label>Description</label>
-          <textarea rows="3" [value]="t.description ?? ''"
-                    (change)="onTacheDescription(t, $event)"></textarea>
+          <app-rich-editor
+            [value]="t.description ?? ''"
+            (valueChange)="onTacheDescriptionRich(t, $event)">
+          </app-rich-editor>
         </div>
 
         <div class="card mt-2">
@@ -157,16 +314,23 @@
                 @for (a of t.actions ?? []; track a.id) {
                   <tr>
                     <td>
-                      <input type="date" class="cell-input" [value]="a.date_action ?? ''"
+                      {{ toIsoDate(a.date_action) }} :
+                      {{ a.date_action }} :
+                      <input type="date" class="cell-input"
+                             [value]="toIsoDate(a.date_action)"
                              (change)="onActionField(a, 'date_action', $event)">
                     </td>
                     <td>
-                      <input class="cell-input" [value]="a.libelle"
+                      <input class="cell-input"
+                             [value]="a.libelle"
                              (change)="onActionField(a, 'libelle', $event)">
                     </td>
                     <td>
-                      <input class="cell-input" [value]="a.description ?? ''"
-                             (change)="onActionField(a, 'description', $event)">
+                      <app-rich-editor
+                        [value]="a.description ?? ''"
+                        [compact]="true"
+                        (valueChange)="onActionFieldRich(a, 'description', $event)">
+                      </app-rich-editor>
                     </td>
                     <td><button class="icon-btn danger" (click)="deleteAction(a)">✕</button></td>
                   </tr>

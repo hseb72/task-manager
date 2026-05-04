@@ -1,14 +1,25 @@
 import express from 'express';
 import cors from 'cors';
 import { initDatabase, seedIfEmpty } from './db/init.js';
-import tachesRouter from './routes/taches.js';
-import refsRouter   from './routes/refs.js';
+import tachesRouter   from './routes/taches.js';
+import refsRouter     from './routes/refs.js';
+import transferRouter from './routes/transfer.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '1mb' }));
+
+// Le parser binaire doit être déclaré AVANT le parser JSON pour /api/import.
+// On accepte n'importe quel Content-Type (type: '*/*') pour fiabiliser
+// la réception, qu'il s'agisse de gzip, octet-stream, json brut, etc.
+// La détection du format réel (gzip ou JSON) est faite par le handler.
+app.use('/api/import', express.raw({
+  type: '*/*',
+  limit: '50mb',
+}));
+
+app.use(express.json({ limit: '5mb' }));
 
 // Petit logger discret
 app.use((req, _res, next) => {
@@ -23,6 +34,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/taches', tachesRouter);
 app.use('/api/refs',   refsRouter);
+app.use('/api',        transferRouter);
 
 // 404 JSON
 app.use((req, res) => {
@@ -45,7 +57,9 @@ app.use((err, _req, res, _next) => {
       console.log(`  Routes disponibles :`);
       console.log(`    GET  /api/health`);
       console.log(`    *    /api/taches[/:id[/actions|/contacts]]`);
-      console.log(`    *    /api/refs/:table[/:id]\n`);
+      console.log(`    *    /api/refs/:table[/:id]`);
+      console.log(`    GET  /api/export`);
+      console.log(`    POST /api/import?mode=replace|merge\n`);
     });
   } catch (err) {
     console.error('Impossible de démarrer le serveur :', err);

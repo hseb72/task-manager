@@ -1,4 +1,3 @@
-/* Largeurs colonnes spécifiques */
 :host { display: block; }
 
 table.data-table input.cell-input,
@@ -10,4 +9,87 @@ table.data-table td input[type="date"].cell-input {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   min-width: 120px;
+}
+
+/* Rich editor compact dans une cellule de tableau */
+table.data-table td app-rich-editor {
+  min-width: 240px;
+}
+
+/* ==========================================================================
+   En-têtes triables
+   ========================================================================== */
+table.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+table.data-table th.sortable:hover {
+  background: var(--line-soft);
+  color: var(--ink);
+}
+
+/* ==========================================================================
+   Ligne de filtres par colonne
+   ========================================================================== */
+table.data-table tr.filter-row th {
+  background: var(--surface);
+  padding: 0.4rem 0.4rem;
+  border-bottom: 1px solid var(--line);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: normal;
+  position: sticky;
+  top: 33px; /* sous la ligne sortable */
+}
+.filter-input {
+  width: 100%;
+  font-size: 0.75rem !important;
+  padding: 0.25rem 0.4rem !important;
+  border: 1px solid var(--line-soft) !important;
+  background: var(--bg) !important;
+}
+.filter-input:focus {
+  background: var(--surface) !important;
+  border-color: var(--accent) !important;
+}
+
+/* ==========================================================================
+   Pagination
+   ========================================================================== */
+.paginator {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.7rem 0.4rem 0.2rem;
+  font-size: 0.82rem;
+}
+.paginator-left  { justify-self: start; }
+.paginator-center{ justify-self: center; font-style: italic; }
+.paginator-right { justify-self: end; display: flex; gap: 0.15rem; align-items: center; flex-wrap: wrap; }
+
+.paginator .page-btn {
+  min-width: 30px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+}
+.paginator .page-btn.current {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+.paginator .page-btn.current:hover {
+  background: var(--accent);
+  color: white;
+}
+.paginator .page-ellipsis {
+  padding: 0 0.3rem;
+  color: var(--ink-mute);
+}
+
+@media (max-width: 720px) {
+  .paginator { grid-template-columns: 1fr; }
+  .paginator-left, .paginator-center, .paginator-right { justify-self: stretch; }
+  .paginator-right { justify-content: center; }
 }

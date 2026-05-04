@@ -1,0 +1,94 @@
+:host { display: inline-block; position: relative; }
+
+.split-btn {
+  display: inline-flex;
+  position: relative;
+}
+
+.split-main,
+.split-arrow {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.01em;
+}
+
+.split-main {
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius) 0 0 var(--radius);
+  border-right: none;
+}
+.split-main:hover {
+  border-color: var(--ink);
+  background: var(--bg-alt);
+}
+
+.split-arrow {
+  padding: 0.5rem 0.55rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+}
+.split-arrow:hover {
+  border-color: var(--ink);
+  background: var(--bg-alt);
+}
+
+.split-btn.open .split-arrow {
+  background: var(--bg-alt);
+  border-color: var(--ink);
+}
+
+.split-main:disabled,
+.split-arrow:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ==========================================================================
+   Menu déroulant
+   ========================================================================== */
+.split-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  list-style: none;
+  margin: 0;
+  padding: 0.3rem 0;
+  z-index: 50;
+  white-space: nowrap;
+}
+.split-menu li { padding: 0; }
+.split-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+  border-radius: 0;
+}
+.split-menu button:hover { background: var(--bg-alt); }
+.split-menu button.current {
+  font-weight: 500;
+  color: var(--accent);
+}
+.split-menu button.danger { color: var(--danger); }
+.split-menu button.danger:hover { background: #f4dcdc; }
+.split-menu button:disabled { opacity: 0.4; cursor: not-allowed; }
