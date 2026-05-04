@@ -1,0 +1,57 @@
+<svg viewBox="0 0 690 940" xmlns="http://www.w3.org/2000/svg">
+
+<!-- ===== BLEED BACKGROUND ===== -->
+<rect width="690" height="940" fill="#F6F1E7"/>
+
+<!-- ===== SAFE FRAME (guide) ===== -->
+<rect x="30" y="30" width="630" height="880"
+fill="none" stroke="#FF0000" stroke-dasharray="6"/>
+
+<!-- ===== CARD BORDER ===== -->
+<rect x="30" y="30" width="630" height="880" rx="20"
+fill="none" stroke="#C8B27A" stroke-width="4"/>
+
+<!-- ===== HEADER ===== -->
+<rect x="50" y="50" width="590" height="100" rx="12"
+fill="#FBF8F2" stroke="#C8B27A"/>
+
+<!-- COST -->
+<circle cx="90" cy="100" r="35" fill="#C9A64B"/>
+<text x="90" y="108" text-anchor="middle" font-size="28" font-weight="bold">X</text>
+
+<!-- NAME -->
+<text x="345" y="105"
+text-anchor="middle"
+font-size="36"
+font-family="Cinzel"
+font-weight="bold">
+NOM CARTE
+</text>
+
+<!-- ===== STATS ===== -->
+<g font-size="18" text-anchor="middle">
+<text x="500" y="170">⚔ X</text>
+<text x="560" y="170">✦ X</text>
+<text x="620" y="170">➤ X</text>
+</g>
+
+<!-- ===== ILLUSTRATION ===== -->
+<rect x="50" y="180" width="590" height="380" rx="16"
+fill="#DDD" stroke="#C8B27A"/>
+
+<!-- ===== ABILITIES ===== -->
+<g font-size="18">
+<text x="60" y="600">(1) Capacité 1</text>
+<text x="60" y="650">(2) Capacité 2</text>
+<text x="60" y="700">(3) Capacité 3</text>
+</g>
+
+<!-- ===== FOOTER ===== -->
+<rect x="50" y="820" width="590" height="60" rx="10"
+fill="#EFE6D3" stroke="#C8B27A"/>
+
+<text x="345" y="855" text-anchor="middle" font-size="14">
+SET | 001 | ARTISTE | ©
+</text>
+
+</svg>
