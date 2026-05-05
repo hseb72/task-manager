@@ -85,3 +85,54 @@
   text-decoration: line-through;
 }
 .data-table tr.skipped strong { font-weight: normal; }
+
+/* ==========================================================================
+   Bandeau récap des zones détectées
+   ========================================================================== */
+.zone-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 1rem;
+  font-size: 0.78rem;
+}
+.zone-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+  font-weight: 500;
+  border: 1px solid;
+}
+.zone-count.empty { opacity: 0.4; }
+.zc-title   { color: #2d3f7c; border-color: #c4ccdc; background: rgba(45, 63, 124, 0.05); }
+.zc-field   { color: #2f6b3a; border-color: #c8dccb; background: rgba(47, 107, 58, 0.05); }
+.zc-desc    { color: #b8541b; border-color: #ecd0a8; background: rgba(184, 84, 27, 0.05); }
+.zc-contact { color: #7a4cb0; border-color: #d4c0e6; background: rgba(122, 76, 176, 0.05); }
+.zc-unknown { color: var(--ink-mute); border-color: var(--line); background: var(--surface); }
+.zc-conf    { margin-left: auto; color: var(--ink-soft); border-color: var(--line); background: var(--surface); }
+
+/* Mise en évidence d'une ligne contact quand sa zone est sélectionnée */
+.data-table tr.row-highlighted {
+  background: rgba(122, 76, 176, 0.08) !important;
+}
+
+/* ==========================================================================
+   Touches clavier (kbd)
+   ========================================================================== */
+.drop-text kbd {
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  color: var(--ink);
+  margin: 0 0.1rem;
+}

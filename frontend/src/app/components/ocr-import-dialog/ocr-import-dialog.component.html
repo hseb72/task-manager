@@ -1,11 +1,11 @@
-<div class="modal-backdrop" (click)="cancel()" (paste)="onPaste($event)">
+<div class="modal-backdrop" (click)="cancel()">
   <div class="modal ocr-modal" (click)="$event.stopPropagation()">
     <div class="modal-head">
       <div>
         <h2>Importer une tâche depuis une image</h2>
         <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
           @switch (step()) {
-            @case ('upload')    { Déposez une capture d'écran (Outlook, Teams…) ou collez-la depuis le presse-papier. }
+            @case ('upload')    { Déposez une capture d'écran (Outlook, Teams, CMDB…) ou collez-la depuis le presse-papier. }
             @case ('analyzing') { Reconnaissance du texte en cours… }
             @case ('review')    { Vérifiez et ajustez les informations détectées avant de valider. }
             @case ('creating')  { Création de la tâche et des contacts… }
@@ -24,14 +24,16 @@
       @if (step() === 'upload') {
         <div class="drop-zone" (drop)="onImageDrop($event)" (dragover)="onDragOver($event)">
           <div class="drop-icon">📄</div>
-          <div class="drop-text">Glissez une image ici, collez (Ctrl+V), ou&nbsp;:</div>
+          <div class="drop-text">
+            Glissez une image ici, ou collez-la avec <kbd>Ctrl</kbd>+<kbd>V</kbd>
+          </div>
           <label class="btn primary" style="display: inline-block">
             <input type="file" accept="image/*" style="display: none" (change)="onFileSelected($event)">
-            Sélectionner une image
+            …ou sélectionner une image
           </label>
           <div class="muted mt-2" style="font-size: 0.78rem">
-            Formats supportés : PNG, JPEG, GIF, BMP. Mieux : captures d'écran nettes,<br>
-            avec en-têtes de mail visibles (« De: », « Objet: », etc.).
+            L'image sera pré-traitée (binarisation, augmentation de contraste) puis analysée.<br>
+            Mieux : captures d'écran nettes avec libellés visibles.
           </div>
         </div>
       }
@@ -56,21 +58,55 @@
       <!-- Étape : REVIEW                                                  -->
       <!-- ============================================================== -->
       @if (step() === 'review' && extracted(); as data) {
+        <!-- Bandeau récap des zones détectées -->
+        @if (zoneCounts(); as zc) {
+          <div class="zone-summary">
+            <span class="zone-count zc-title"   [class.empty]="!zc.title">{{ zc.title }} titre</span>
+            <span class="zone-count zc-field"   [class.empty]="!zc.field">{{ zc.field }} champ(s)</span>
+            <span class="zone-count zc-desc"    [class.empty]="!zc.description">{{ zc.description }} description</span>
+            <span class="zone-count zc-contact" [class.empty]="!zc.contact">{{ zc.contact }} contact(s)</span>
+            @if (zc.unknown > 0) {
+              <span class="zone-count zc-unknown">{{ zc.unknown }} non classifié(s)</span>
+            }
+            <span class="zone-count zc-conf">Confiance OCR : {{ data.confidence | number: '1.0-0' }}%</span>
+          </div>
+        }
+
         <div class="grid-2">
-          <!-- Colonne gauche : aperçu image + texte brut -->
+          <!-- Colonne gauche : aperçu image avec overlay des zones -->
           <div>
-            @if (imagePreview(); as img) {
+            @if (showOverlay() && imagePreview() && pageResult(); as _) {
+              <app-ocr-zone-overlay
+                [imageSrc]="imagePreview() ?? ''"
+                [imageWidth]="pageResult()?.imageWidth ?? 0"
+                [imageHeight]="pageResult()?.imageHeight ?? 0"
+                [zones]="data.zones"
+                [selectedId]="selectedZoneId()"
+                (zoneClicked)="onZoneClicked($event)">
+              </app-ocr-zone-overlay>
+            } @else if (imagePreview(); as img) {
               <img [src]="img" alt="aperçu" class="image-preview">
             }
-            <details class="mt-2">
-              <summary class="muted" style="font-size: 0.78rem; cursor: pointer">
-                Voir le texte OCR brut (confiance : {{ data.confidence | number: '1.0-0' }}%)
-              </summary>
-              <pre class="raw-text">{{ data.rawText }}</pre>
-            </details>
+
+            <div class="row gap-sm mt-2" style="font-size: 0.78rem">
+              <label class="row gap-sm" style="margin-bottom: 0">
+                <input type="checkbox" [checked]="showOverlay()"
+                       (change)="showOverlay.set(!showOverlay())">
+                <span>Afficher les zones détectées</span>
+              </label>
+              <label class="row gap-sm" style="margin-bottom: 0">
+                <input type="checkbox" [checked]="showRawText()"
+                       (change)="showRawText.set(!showRawText())">
+                <span>Afficher le texte OCR brut</span>
+              </label>
+            </div>
+
+            @if (showRawText()) {
+              <pre class="raw-text mt-2">{{ data.rawText }}</pre>
+            }
           </div>
 
-          <!-- Colonne droite : champs éditables de la tâche -->
+          <!-- Colonne droite : champs éditables -->
           <div>
             <label>Libellé</label>
             <input [value]="libelle()" (input)="libelle.set(v($event))">
@@ -140,7 +176,9 @@
               </thead>
               <tbody>
                 @for (d of contactDecisions(); track $index; let i = $index) {
-                  <tr [class.skipped]="d.mode === 'skip'">
+                  <tr [class.skipped]="d.mode === 'skip'"
+                      [class.row-highlighted]="d.zoneId && d.zoneId === selectedZoneId()"
+                      (mouseenter)="highlightFromContact(i)">
                     <td>
                       <input type="radio" name="intervenant"
                              [checked]="intervenantIdx() === i"
@@ -220,6 +258,7 @@
               Le contact coché à gauche sera désigné comme <strong>intervenant</strong> de la tâche ;
               tous les contacts conservés (intervenant inclus) seront liés à la tâche avec leur rôle respectif.
               Saisir un rôle absent du référentiel le créera automatiquement.
+              <strong>Astuce :</strong> survolez une ligne pour mettre en évidence sa zone dans l'image, et inversement.
             </div>
           }
         </div>
@@ -231,28 +270,18 @@
         }
       }
 
-      <!-- ============================================================== -->
-      <!-- Étape : CREATING                                                -->
-      <!-- ============================================================== -->
+      <!-- Autres étapes -->
       @if (step() === 'creating') {
         <div style="text-align: center; padding: 2rem">
           <div class="muted">Création en cours…</div>
         </div>
       }
-
-      <!-- ============================================================== -->
-      <!-- Étape : DONE                                                    -->
-      <!-- ============================================================== -->
       @if (step() === 'done') {
         <div style="text-align: center; padding: 2rem; color: var(--ok)">
           <div style="font-size: 2rem; margin-bottom: 0.5rem">✓</div>
           <div>Tâche créée avec succès.</div>
         </div>
       }
-
-      <!-- ============================================================== -->
-      <!-- Étape : ERROR                                                   -->
-      <!-- ============================================================== -->
       @if (step() === 'error') {
         <div class="card" style="border-left: 3px solid var(--danger)">
           <div style="color: var(--danger); margin-bottom: 0.5rem"><strong>Échec</strong></div>

@@ -1,0 +1,99 @@
+:host { display: block; }
+
+.overlay-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.overlay-image-wrap {
+  position: relative;
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-alt);
+  max-width: 100%;
+  line-height: 0;        /* évite l'espace fantôme sous l'image inline */
+}
+
+.overlay-image {
+  display: block;
+  max-width: 100%;
+  max-height: 480px;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.overlay-zone {
+  position: absolute;
+  border: 2px solid;
+  border-radius: 2px;
+  cursor: grab;
+  transition: box-shadow 0.15s ease;
+  pointer-events: auto;
+}
+.overlay-zone:active {
+  cursor: grabbing;
+}
+.overlay-zone:dragging {
+  opacity: 0.5;
+  outline: 2px deshed white;
+}
+.overlay-zone:hover {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 0 0 4px rgba(0, 0, 0, 0.2);
+  z-index: 5;
+}
+.overlay-zone.selected {
+  box-shadow: 0 0 0 2px white, 0 0 0 5px var(--accent);
+  z-index: 10;
+}
+
+.overlay-tag {
+  position: absolute;
+  top: -1.2rem;
+  left: -1px;
+  font-size: 0.7rem;
+  font-family: var(--font-body);
+  font-weight: 500;
+  color: white;
+  padding: 0.1rem 0.4rem;
+  white-space: nowrap;
+  border-radius: 2px 2px 0 0;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+/* Sur les très petites zones (< 18px), on planque l'étiquette pour éviter le bruit */
+.overlay-zone[style*="height: 1."] .overlay-tag,
+.overlay-zone[style*="height: 0."] .overlay-tag {
+  display: none;
+}
+
+/* ==========================================================================
+   Légende
+   ========================================================================== */
+.overlay-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  padding: 0.4rem 0.2rem;
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.legend-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+}
+.legend-hint {
+  margin-left: auto;
+  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
