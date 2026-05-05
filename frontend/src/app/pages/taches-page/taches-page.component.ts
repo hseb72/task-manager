@@ -6,12 +6,13 @@ import { RefsService } from '../../services/refs.service';
 import { TransferService } from '../../services/transfer.service';
 import { SplitButtonComponent, SplitButtonAction } from '../../components/split-button/split-button.component';
 import { RichEditorComponent } from '../../components/rich-editor/rich-editor.component';
-import { Tache, Action, ContactRef } from '../../models/models';
+import { OcrImportDialogComponent } from '../../components/ocr-import-dialog/ocr-import-dialog.component';
+import { Tache, Action, ContactRef, TacheContact } from '../../models/models';
 
 @Component({
   selector: 'app-taches-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, SplitButtonComponent, RichEditorComponent],
+  imports: [CommonModule, FormsModule, SplitButtonComponent, RichEditorComponent, OcrImportDialogComponent],
   templateUrl: './taches-page.component.html',
   styleUrl: './taches-page.component.css',
 })
@@ -99,6 +100,19 @@ export class TachesPageComponent implements OnInit {
   selected = signal<Tache | null>(null);
   filterText = signal('');
 
+  /** Affichage du dialogue d'import OCR. */
+  showOcrDialog = signal(false);
+
+  openOcrDialog() { this.showOcrDialog.set(true); }
+  onOcrDialogClosed(ev: { created: boolean; tacheId?: number }) {
+    this.showOcrDialog.set(false);
+    if (ev.created) {
+      // Recharge la liste pour faire apparaître la nouvelle tâche
+      this.reload();
+      this.refs.loadAll().subscribe();
+    }
+  }
+
   /** Sélecteur du contact à ajouter dans le panneau de détails. */
   contactToAdd = signal<number | null>(null);
 
@@ -115,9 +129,9 @@ export class TachesPageComponent implements OnInit {
     id:               t => t.id,
     libelle:          t => (t.libelle ?? '').toLowerCase(),
     etatLibelle:      t => (t.etatLibelle ?? '').toLowerCase(),
-    demandeurNom:     t => (t.demandeurNom ?? '').toLowerCase(),
-    demandeurService: t => (t.demandeurService ?? '').toLowerCase(),
-    demandeurEntite:  t => (t.demandeurEntite ?? '').toLowerCase(),
+    intervenantNom:   t => (t.intervenantNom ?? '').toLowerCase(),
+    serviceLibelle:   t => (t.serviceLibelle ?? '').toLowerCase(),
+    entiteLibelle:    t => (t.entiteLibelle ?? '').toLowerCase(),
     domaineLibelle:   t => (t.domaineLibelle ?? '').toLowerCase(),
     dateDeclaration:  t => t.dateDeclaration ?? '',
     dateEcheance:     t => t.dateEcheance ?? '',
@@ -174,9 +188,9 @@ export class TachesPageComponent implements OnInit {
     return this.taches().filter(t =>
       (t.libelle ?? '').toLowerCase().includes(q) ||
       (t.description ?? '').toLowerCase().includes(q) ||
-      (t.demandeurNom ?? '').toLowerCase().includes(q) ||
-      (t.demandeurService ?? '').toLowerCase().includes(q) ||
-      (t.demandeurEntite ?? '').toLowerCase().includes(q) ||
+      (t.intervenantNom ?? '').toLowerCase().includes(q) ||
+      (t.serviceLibelle ?? '').toLowerCase().includes(q) ||
+      (t.entiteLibelle ?? '').toLowerCase().includes(q) ||
       (t.etatLibelle ?? '').toLowerCase().includes(q) ||
       String(t.id).includes(q)
     );
@@ -191,9 +205,9 @@ export class TachesPageComponent implements OnInit {
     id?: string;
     libelle?: string;
     etatId?: number | null;
-    demandeurId?: number | null;
-    demandeurServiceId?: number | null;
-    demandeurEntiteId?: number | null;
+    intervenantId?: number | null;
+    serviceId?: number | null;
+    entiteId?: number | null;
     domaineId?: number | null;
     dateDeclaration?: string;
     dateEcheance?:    string;
@@ -237,19 +251,12 @@ export class TachesPageComponent implements OnInit {
       if (f.libelle   && !lc(t.libelle).includes(f.libelle.toLowerCase()))  return false;
 
       // Listes (égalité d'ID)
-      if (f.etatId      != null && t.etatId      !== f.etatId)      return false;
-      if (f.demandeurId != null && t.demandeurId !== f.demandeurId) return false;
-      if (f.domaineId   != null && t.domaineId   !== f.domaineId)   return false;
-
-      // Service / Entité dérivés du demandeur — comparaison par libellé en cache
-      if (f.demandeurServiceId != null) {
-        const svc = this.refs.services().find(s => s.id === f.demandeurServiceId);
-        if (!svc || t.demandeurService !== svc.libelle) return false;
-      }
-      if (f.demandeurEntiteId != null) {
-        const ent = this.refs.entites().find(e => e.id === f.demandeurEntiteId);
-        if (!ent || t.demandeurEntite !== ent.libelle) return false;
-      }
+      // Listes (égalité d'ID)
+      if (f.etatId        != null && t.etatId        !== f.etatId)        return false;
+      if (f.intervenantId != null && t.intervenantId !== f.intervenantId) return false;
+      if (f.serviceId     != null && t.serviceId     !== f.serviceId)     return false;
+      if (f.entiteId      != null && t.entiteId      !== f.entiteId)      return false;
+      if (f.domaineId     != null && t.domaineId     !== f.domaineId)     return false;
 
       // Plages de dates : on compare en string ISO 'YYYY-MM-DD' (10 premiers caractères)
       const dDecl = (t.dateDeclaration ?? '').slice(0, 10);
@@ -495,6 +502,7 @@ export class TachesPageComponent implements OnInit {
       this.selected.set({ ...t, actions: [a, ...(t.actions ?? [])] });
     });
   }
+
   onActionField(a: Action, field: keyof Action, ev: Event) {
     this.applyActionPatch(a, field, this.valOrNull(ev));
   }
@@ -521,7 +529,6 @@ export class TachesPageComponent implements OnInit {
     };
     updateLocally({ [field]: value } as Partial<Action>);
 
-    console.log('Updating action', a.id, 'field', field, 'to', value);
     // Construire le payload envoyé au backend (toujours les 3 champs nécessaires)
     const updated = { ...a, [field]: value } as Action;
     this.tacheSrv.updateAction(t.id, a.id, {
@@ -534,7 +541,6 @@ export class TachesPageComponent implements OnInit {
           x.id === a.id ? { ...x, ...server } : x
         );
         this.selected.set({ ...this.selected()!, actions: list });
-        console.log(JSON.stringify(this.selected));
       },
       error: err => {
         console.error('Mise à jour de l\'action échouée', err);
@@ -552,20 +558,40 @@ export class TachesPageComponent implements OnInit {
   }
 
   /* ====================================================================== */
-  /*  Contacts associés (référentiel)                                        */
+  /*  Contacts associés (référentiel) + rôle porté par la liaison            */
   /* ====================================================================== */
+
+  /** Rôle à attribuer à la prochaine liaison (signal pour le sélecteur). */
+  contactToAddRoleId = signal<number | null>(null);
 
   linkContact() {
     const t = this.selected();
     const cid = this.contactToAdd();
     if (!t || !cid) return;
-    this.tacheSrv.linkContact(t.id, cid).subscribe(list => {
+    const rid = this.contactToAddRoleId();
+    this.tacheSrv.linkContact(t.id, cid, rid).subscribe(list => {
       this.selected.set({ ...t, contacts: list });
       this.contactToAdd.set(null);
+      this.contactToAddRoleId.set(null);
     });
   }
 
-  unlinkContact(c: ContactRef) {
+  /** Modifie le rôle d'un contact déjà lié. */
+  setLinkRole(c: TacheContact, roleId: number | null) {
+    const t = this.selected();
+    if (!t) return;
+    // Mise à jour optimiste
+    const arr = (t.contacts ?? []).map(x =>
+      x.id === c.id ? { ...x, role_id: roleId } : x
+    );
+    this.selected.set({ ...t, contacts: arr });
+    this.tacheSrv.updateContactRole(t.id, c.id, roleId).subscribe({
+      next: list => this.selected.set({ ...t, contacts: list }),
+      error: err => console.error('Mise à jour du rôle échouée', err),
+    });
+  }
+
+  unlinkContact(c: TacheContact) {
     const t = this.selected();
     if (!t) return;
     this.tacheSrv.unlinkContact(t.id, c.id).subscribe(() => {

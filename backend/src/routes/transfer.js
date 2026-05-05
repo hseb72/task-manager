@@ -12,6 +12,7 @@ const TABLES_IN_ORDER = [
   'entites',
   'services',
   'contacts',
+  'roles',
   'etats',
   'domaines',
   'taches',

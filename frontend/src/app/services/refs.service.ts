@@ -11,11 +11,11 @@ export class RefsService {
   private http = inject(HttpClient);
   private base = '/api/refs';
 
-  /** Cache global, alimenté par loadAll(). */
   readonly tables   = signal<ReferenceTableMeta[]>([]);
   readonly entites  = signal<SimpleRef[]>([]);
   readonly services = signal<ServiceRef[]>([]);
   readonly contacts = signal<ContactRef[]>([]);
+  readonly roles    = signal<SimpleRef[]>([]);
   readonly etats    = signal<SimpleRef[]>([]);
   readonly domaines = signal<SimpleRef[]>([]);
 
@@ -25,6 +25,7 @@ export class RefsService {
       entites:  this.http.get<SimpleRef[]>(`${this.base}/entites`),
       services: this.http.get<ServiceRef[]>(`${this.base}/services`),
       contacts: this.http.get<ContactRef[]>(`${this.base}/contacts`),
+      roles:    this.http.get<SimpleRef[]>(`${this.base}/roles`),
       etats:    this.http.get<SimpleRef[]>(`${this.base}/etats`),
       domaines: this.http.get<SimpleRef[]>(`${this.base}/domaines`),
     }).pipe(tap(r => {
@@ -32,6 +33,7 @@ export class RefsService {
       this.entites.set(r.entites);
       this.services.set(r.services);
       this.contacts.set(r.contacts);
+      this.roles.set(r.roles);
       this.etats.set(r.etats);
       this.domaines.set(r.domaines);
     }));
@@ -50,12 +52,12 @@ export class RefsService {
     return this.http.delete<void>(`${this.base}/${table}/${id}`);
   }
 
-  /** Met à jour le signal correspondant à un référentiel. */
   refreshSignal(table: string, values: RefRow[]) {
     switch (table) {
       case 'entites':  this.entites.set(values as SimpleRef[]);  break;
       case 'services': this.services.set(values as ServiceRef[]); break;
       case 'contacts': this.contacts.set(values as ContactRef[]); break;
+      case 'roles':    this.roles.set(values as SimpleRef[]);    break;
       case 'etats':    this.etats.set(values as SimpleRef[]);    break;
       case 'domaines': this.domaines.set(values as SimpleRef[]); break;
     }

@@ -116,11 +116,10 @@ router.post('/:table', ensureTable, async (req, res, next) => {
       const nom = (b.nom ?? '').trim();
       if (!nom) return res.status(400).json({ error: 'Nom requis' });
       result = await db.execute({
-        sql: `INSERT INTO contacts (nom, role, email, telephone, actif, service_id)
-              VALUES (?, ?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO contacts (nom, email, telephone, actif, service_id)
+              VALUES (?, ?, ?, ?, ?)`,
         args: [
           nom,
-          b.role ?? null,
           b.email ?? null,
           b.telephone ?? null,
           b.actif === 0 ? 0 : 1,
@@ -157,7 +156,7 @@ router.put('/:table/:id', ensureTable, async (req, res, next) => {
     const fieldMaps = {
       simple:  { libelle: 'libelle', actif: 'actif' },
       service: { libelle: 'libelle', actif: 'actif', entite_id: 'entite_id' },
-      contact: { nom: 'nom', role: 'role', email: 'email', telephone: 'telephone',
+      contact: { nom: 'nom', email: 'email', telephone: 'telephone',
                  actif: 'actif', service_id: 'service_id' },
     };
     const map = fieldMaps[kind];

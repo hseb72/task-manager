@@ -1,0 +1,78 @@
+<svg viewBox="0 0 630 880" xmlns="http://www.w3.org/2000/svg">
+
+<!-- ================= BACKGROUND ================= -->
+<rect width="630" height="880" fill="#F2E9D8"/>
+
+<!-- ================= BORDER ================= -->
+<rect x="10" y="10" width="610" height="860" rx="25"
+fill="none" stroke="#C8B27A" stroke-width="6"/>
+
+<!-- Inner border -->
+<rect x="20" y="20" width="590" height="840" rx="20"
+fill="none" stroke="#E6D6A8" stroke-width="2"/>
+
+<!-- ================= HEADER ================= -->
+<rect x="30" y="30" width="570" height="100" rx="12"
+fill="#F7F1E3" stroke="#C8B27A"/>
+
+<!-- Center ornament -->
+<line x1="250" y1="80" x2="380" y2="80"
+stroke="#C8B27A" stroke-width="1"/>
+<circle cx="315" cy="80" r="4" fill="#C8B27A"/>
+
+<!-- ================= COST MEDALLION ================= -->
+<circle cx="80" cy="80" r="40"
+fill="#C9A64B" stroke="#A88734" stroke-width="3"/>
+
+<!-- ================= STATS BADGES ================= -->
+
+<!-- Physique -->
+<g transform="translate(470,75)">
+  <path d="M0,-35 L25,-20 L25,15 L0,35 L-25,15 L-25,-20 Z"
+        fill="#8C2F2F"/>
+</g>
+
+<!-- Psychique -->
+<g transform="translate(520,75)">
+  <path d="M0,-35 L25,-20 L25,15 L0,35 L-25,15 L-25,-20 Z"
+        fill="#4B4FA3"/>
+</g>
+
+<!-- Mouvement -->
+<g transform="translate(570,75)">
+  <path d="M0,-35 L25,-20 L25,15 L0,35 L-25,15 L-25,-20 Z"
+        fill="#3F7C4C"/>
+</g>
+
+<!-- ================= TYPE LINE ================= -->
+<rect x="30" y="130" width="570" height="40"
+fill="#EDE3CF"/>
+
+<!-- ================= ILLUSTRATION ZONE ================= -->
+<rect x="30" y="170" width="570" height="400" rx="12"
+fill="#D8D8D8" stroke="#C8B27A"/>
+
+<!-- ================= ABILITIES BLOCK ================= -->
+<rect x="30" y="580" width="570" height="220" rx="12"
+fill="#F7F1E3" stroke="#C8B27A"/>
+
+<!-- Separators -->
+<line x1="40" y1="650" x2="590" y2="650"
+stroke="#C8B27A"/>
+<line x1="40" y1="720" x2="590" y2="720"
+stroke="#C8B27A"/>
+
+<!-- Level circles -->
+<circle cx="60" cy="615" r="20" fill="#3A4A6A"/>
+<circle cx="60" cy="685" r="20" fill="#3A4A6A"/>
+<circle cx="60" cy="755" r="20" fill="#3A4A6A"/>
+
+<!-- ================= FOOTER ================= -->
+<rect x="30" y="810" width="570" height="50" rx="10"
+fill="#E0D6BE" stroke="#C8B27A"/>
+
+<!-- Center crest -->
+<circle cx="315" cy="835" r="18"
+fill="#C8B27A"/>
+
+</svg>

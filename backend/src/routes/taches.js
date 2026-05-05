@@ -18,18 +18,18 @@ function rowToTache(row) {
     dateFin:            row.date_fin,
     dureePrevue:        row.duree_prevue,
     dureeAccomplie:     row.duree_accomplie,
-    demandeurId:        row.demandeur_id,
+    intervenantId:      row.intervenant_id,
+    serviceId:          row.service_id,
     etatId:             row.etat_id,
     domaineId:          row.domaine_id,
 
-    // Libellés joints (lecture seule)
-    demandeurNom:       row.demandeur_nom        ?? null,
-    demandeurServiceId: row.demandeur_service_id ?? null,
-    demandeurService:   row.demandeur_service    ?? null,
-    demandeurEntiteId:  row.demandeur_entite_id  ?? null,
-    demandeurEntite:    row.demandeur_entite     ?? null,
-    etatLibelle:        row.etat_libelle         ?? null,
-    domaineLibelle:     row.domaine_libelle      ?? null,
+    // Libellés joints (lecture seule). entiteId/Libelle sont dérivés du service.
+    intervenantNom:     row.intervenant_nom    ?? null,
+    serviceLibelle:     row.service_libelle    ?? null,
+    entiteId:           row.entite_id          ?? null,
+    entiteLibelle:      row.entite_libelle     ?? null,
+    etatLibelle:        row.etat_libelle       ?? null,
+    domaineLibelle:     row.domaine_libelle    ?? null,
 
     createdAt:          row.created_at,
     updatedAt:          row.updated_at,
@@ -38,33 +38,35 @@ function rowToTache(row) {
 
 const SELECT_TACHE_JOIN = `
   SELECT t.*,
-         dc.nom        AS demandeur_nom,
-         dc.service_id AS demandeur_service_id,
-         ds.libelle    AS demandeur_service,
-         ds.entite_id  AS demandeur_entite_id,
-         de.libelle    AS demandeur_entite,
+         ic.nom        AS intervenant_nom,
+         s.libelle     AS service_libelle,
+         s.entite_id   AS entite_id,
+         e.libelle     AS entite_libelle,
          et.libelle    AS etat_libelle,
          dm.libelle    AS domaine_libelle
   FROM taches t
-  LEFT JOIN contacts dc ON t.demandeur_id = dc.id
-  LEFT JOIN services ds ON dc.service_id  = ds.id
-  LEFT JOIN entites  de ON ds.entite_id   = de.id
-  LEFT JOIN etats    et ON t.etat_id      = et.id
-  LEFT JOIN domaines dm ON t.domaine_id   = dm.id
+  LEFT JOIN contacts ic ON t.intervenant_id = ic.id
+  LEFT JOIN services s  ON t.service_id     = s.id
+  LEFT JOIN entites  e  ON s.entite_id      = e.id
+  LEFT JOIN etats    et ON t.etat_id        = et.id
+  LEFT JOIN domaines dm ON t.domaine_id     = dm.id
 `;
 
-/** Charge les contacts associés (via tache_contacts) avec leurs joints. */
+/** Charge les contacts associés à la tâche, avec leur rôle pour cette tâche. */
 async function loadTacheContacts(tacheId) {
   const { rows } = await db.execute({
     sql: `
       SELECT c.*,
-             s.libelle    AS service_libelle,
-             s.entite_id  AS entite_id,
-             e.libelle    AS entite_libelle
+             tc.role_id     AS role_id,
+             r.libelle      AS role_libelle,
+             s.libelle      AS service_libelle,
+             s.entite_id    AS entite_id,
+             e.libelle      AS entite_libelle
       FROM tache_contacts tc
       JOIN contacts c ON tc.contact_id = c.id
-      LEFT JOIN services s ON c.service_id = s.id
-      LEFT JOIN entites  e ON s.entite_id  = e.id
+      LEFT JOIN roles r    ON tc.role_id    = r.id
+      LEFT JOIN services s ON c.service_id  = s.id
+      LEFT JOIN entites  e ON s.entite_id   = e.id
       WHERE tc.tache_id = ?
       ORDER BY c.nom COLLATE NOCASE ASC
     `,
@@ -94,14 +96,12 @@ router.get('/:id', async (req, res, next) => {
     if (rows.length === 0) return res.status(404).json({ error: 'Tâche introuvable' });
 
     const tache = rowToTache(rows[0]);
-
     const actions = await db.execute({
       sql: 'SELECT * FROM actions WHERE tache_id = ? ORDER BY date_action DESC, id DESC',
       args: [id],
     });
     tache.actions  = actions.rows;
     tache.contacts = await loadTacheContacts(id);
-
     res.json(tache);
   } catch (err) { next(err); }
 });
@@ -113,8 +113,8 @@ router.post('/', async (req, res, next) => {
       sql: `INSERT INTO taches
             (libelle, description, date_declaration, date_echeance, date_fin,
              duree_prevue, duree_accomplie,
-             demandeur_id, etat_id, domaine_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             intervenant_id, service_id, etat_id, domaine_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         b.libelle ?? '(sans libellé)',
         b.description     ?? null,
@@ -123,7 +123,8 @@ router.post('/', async (req, res, next) => {
         b.dateFin         ?? null,
         b.dureePrevue     ?? null,
         b.dureeAccomplie  ?? null,
-        b.demandeurId     ?? null,
+        b.intervenantId   ?? null,
+        b.serviceId       ?? null,
         b.etatId          ?? null,
         b.domaineId       ?? null,
       ],
@@ -150,7 +151,8 @@ router.put('/:id', async (req, res, next) => {
       dateFin:          'date_fin',
       dureePrevue:      'duree_prevue',
       dureeAccomplie:   'duree_accomplie',
-      demandeurId:      'demandeur_id',
+      intervenantId:    'intervenant_id',
+      serviceId:        'service_id',
       etatId:           'etat_id',
       domaineId:        'domaine_id',
     };
@@ -163,10 +165,7 @@ router.put('/:id', async (req, res, next) => {
         args.push(b[key] === '' ? null : b[key]);
       }
     }
-
-    if (sets.length === 0) {
-      return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
-    }
+    if (sets.length === 0) return res.status(400).json({ error: 'Aucun champ à mettre à jour' });
 
     sets.push(`updated_at = datetime('now')`);
     args.push(id);
@@ -187,8 +186,7 @@ router.put('/:id', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
-    const id = Number(req.params.id);
-    await db.execute({ sql: 'DELETE FROM taches WHERE id = ?', args: [id] });
+    await db.execute({ sql: 'DELETE FROM taches WHERE id = ?', args: [Number(req.params.id)] });
     res.status(204).end();
   } catch (err) { next(err); }
 });
@@ -212,8 +210,7 @@ router.post('/:id/actions', async (req, res, next) => {
     const id = Number(req.params.id);
     const b = req.body ?? {};
     const result = await db.execute({
-      sql: `INSERT INTO actions (tache_id, date_action, libelle, description)
-            VALUES (?, ?, ?, ?)`,
+      sql: `INSERT INTO actions (tache_id, date_action, libelle, description) VALUES (?, ?, ?, ?)`,
       args: [id, b.dateAction ?? null, b.libelle ?? '', b.description ?? null],
     });
     const { rows } = await db.execute({
@@ -232,11 +229,8 @@ router.put('/:id/actions/:actionId', async (req, res, next) => {
             SET date_action = ?, libelle = ?, description = ?
             WHERE id = ? AND tache_id = ?`,
       args: [
-        b.dateAction ?? null,
-        b.libelle ?? '',
-        b.description ?? null,
-        Number(req.params.actionId),
-        Number(req.params.id),
+        b.dateAction ?? null, b.libelle ?? '', b.description ?? null,
+        Number(req.params.actionId), Number(req.params.id),
       ],
     });
     const { rows } = await db.execute({
@@ -258,8 +252,7 @@ router.delete('/:id/actions/:actionId', async (req, res, next) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/*  CONTACTS associés à une tâche (relation N:N)                              */
-/*    Le contact lui-même est géré dans /api/refs/contacts                    */
+/*  CONTACTS associés à une tâche (avec rôle porté par la liaison)            */
 /* -------------------------------------------------------------------------- */
 
 router.get('/:id/contacts', async (req, res, next) => {
@@ -269,18 +262,19 @@ router.get('/:id/contacts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Lier un contact existant à une tâche
+// Lier un contact existant (avec un rôle optionnel)
 router.post('/:id/contacts', async (req, res, next) => {
   try {
     const tacheId   = Number(req.params.id);
     const contactId = Number(req.body?.contactId);
-    if (!contactId) {
-      return res.status(400).json({ error: 'contactId requis' });
-    }
+    const roleId    = req.body?.roleId ?? null;
+    if (!contactId) return res.status(400).json({ error: 'contactId requis' });
 
     await db.execute({
-      sql: `INSERT OR IGNORE INTO tache_contacts (tache_id, contact_id) VALUES (?, ?)`,
-      args: [tacheId, contactId],
+      sql: `INSERT INTO tache_contacts (tache_id, contact_id, role_id)
+            VALUES (?, ?, ?)
+            ON CONFLICT(tache_id, contact_id) DO UPDATE SET role_id = excluded.role_id`,
+      args: [tacheId, contactId, roleId],
     });
 
     const list = await loadTacheContacts(tacheId);
@@ -288,7 +282,23 @@ router.post('/:id/contacts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-// Détacher un contact d'une tâche (le contact n'est PAS supprimé du référentiel)
+// Mettre à jour le rôle d'un lien existant
+router.put('/:id/contacts/:contactId', async (req, res, next) => {
+  try {
+    const tacheId   = Number(req.params.id);
+    const contactId = Number(req.params.contactId);
+    const roleId    = req.body?.roleId ?? null;
+
+    await db.execute({
+      sql: `UPDATE tache_contacts SET role_id = ? WHERE tache_id = ? AND contact_id = ?`,
+      args: [roleId, tacheId, contactId],
+    });
+    const list = await loadTacheContacts(tacheId);
+    res.json(list);
+  } catch (err) { next(err); }
+});
+
+// Détacher un contact (le contact lui-même n'est pas supprimé)
 router.delete('/:id/contacts/:contactId', async (req, res, next) => {
   try {
     await db.execute({

@@ -59,9 +59,6 @@
             <input placeholder="Nom *"
                    [value]="newContactNom()"
                    (input)="setAddField('contactNom', $event)">
-            <input placeholder="Rôle"
-                   [value]="newContactRole()"
-                   (input)="setAddField('contactRole', $event)">
             <select [ngModel]="newContactServiceId()"
                     (ngModelChange)="newContactServiceId.set($event)"
                     style="border: 1px solid var(--line)">
@@ -171,7 +168,6 @@
                 <tr>
                   <th style="width: 60px">ID</th>
                   <th style="min-width: 160px">Nom</th>
-                  <th>Rôle</th>
                   <th style="min-width: 180px">Service</th>
                   <th>Entité</th>
                   <th>Email</th>
@@ -187,10 +183,6 @@
                     <td>
                       <input class="cell-input" [value]="v.nom"
                              (change)="renameContact(v, $event)">
-                    </td>
-                    <td>
-                      <input class="cell-input" [value]="v.role ?? ''"
-                             (change)="changeContactField(v, 'role', $event)">
                     </td>
                     <td>
                       <select class="cell-select"

@@ -28,7 +28,6 @@ export class RefsPageComponent implements OnInit {
   newServiceLibelle = signal('');
   newServiceEntiteId = signal<number | null>(null);
   newContactNom = signal('');
-  newContactRole = signal('');
   newContactEmail = signal('');
   newContactTelephone = signal('');
   newContactServiceId = signal<number | null>(null);
@@ -85,7 +84,6 @@ export class RefsPageComponent implements OnInit {
     this.newServiceLibelle.set('');
     this.newServiceEntiteId.set(null);
     this.newContactNom.set('');
-    this.newContactRole.set('');
     this.newContactEmail.set('');
     this.newContactTelephone.set('');
     this.newContactServiceId.set(null);
@@ -114,7 +112,6 @@ export class RefsPageComponent implements OnInit {
       if (!nom) return;
       body = {
         nom,
-        role: this.newContactRole().trim() || null,
         email: this.newContactEmail().trim() || null,
         telephone: this.newContactTelephone().trim() || null,
         service_id: this.newContactServiceId(),
@@ -165,7 +162,7 @@ export class RefsPageComponent implements OnInit {
     if (!newNom || newNom === v.nom) return;
     this.patch(v.id, { nom: newNom });
   }
-  changeContactField(v: ContactRef, field: 'role' | 'email' | 'telephone', ev: Event) {
+  changeContactField(v: ContactRef, field: 'email' | 'telephone', ev: Event) {
     this.patch(v.id, { [field]: this.valOrNull(ev) } as Partial<ContactRef>);
   }
   changeContactService(v: ContactRef, ev: Event) {
@@ -197,7 +194,6 @@ export class RefsPageComponent implements OnInit {
       case 'serviceLibelle':      this.newServiceLibelle.set(v); break;
       case 'serviceEntite':       this.newServiceEntiteId.set(v === '' ? null : Number(v)); break;
       case 'contactNom':          this.newContactNom.set(v); break;
-      case 'contactRole':         this.newContactRole.set(v); break;
       case 'contactEmail':        this.newContactEmail.set(v); break;
       case 'contactTelephone':    this.newContactTelephone.set(v); break;
       case 'contactService':      this.newContactServiceId.set(v === '' ? null : Number(v)); break;

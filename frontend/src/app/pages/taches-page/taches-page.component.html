@@ -17,6 +17,10 @@
       (actionTriggered)="onTransferAction($event, fileInput)">
     </app-split-button>
 
+    <button class="btn" (click)="openOcrDialog()" title="Créer une tâche depuis une image (OCR)">
+      🖼 Image…
+    </button>
+
     <button class="btn primary" (click)="createNew()">+ Nouvelle tâche</button>
   </div>
 </div>
@@ -41,9 +45,9 @@
           <th class="sortable" (click)="toggleSort('id')">ID{{ sortIcon('id') }}</th>
           <th class="sortable" style="min-width: 220px" (click)="toggleSort('libelle')">Libellé{{ sortIcon('libelle') }}</th>
           <th class="sortable" (click)="toggleSort('etatLibelle')">État{{ sortIcon('etatLibelle') }}</th>
-          <th class="sortable" (click)="toggleSort('demandeurNom')">Demandeur{{ sortIcon('demandeurNom') }}</th>
-          <th class="sortable" (click)="toggleSort('demandeurService')">Service{{ sortIcon('demandeurService') }}</th>
-          <th class="sortable" (click)="toggleSort('demandeurEntite')">Entité{{ sortIcon('demandeurEntite') }}</th>
+          <th class="sortable" (click)="toggleSort('intervenantNom')">Intervenant{{ sortIcon('intervenantNom') }}</th>
+          <th class="sortable" (click)="toggleSort('serviceLibelle')">Service{{ sortIcon('serviceLibelle') }}</th>
+          <th class="sortable" (click)="toggleSort('entiteLibelle')">Entité{{ sortIcon('entiteLibelle') }}</th>
           <th class="sortable" (click)="toggleSort('domaineLibelle')">Domaine{{ sortIcon('domaineLibelle') }}</th>
           <th class="sortable" (click)="toggleSort('dateDeclaration')">Déclaration{{ sortIcon('dateDeclaration') }}</th>
           <th class="sortable" (click)="toggleSort('dateEcheance')">Échéance{{ sortIcon('dateEcheance') }}</th>
@@ -75,8 +79,8 @@
           </th>
           <th>
             <select class="filter-input"
-                    [ngModel]="columnFilters().demandeurId"
-                    (ngModelChange)="setColumnFilter('demandeurId', $event)">
+                    [ngModel]="columnFilters().intervenantId"
+                    (ngModelChange)="setColumnFilter('intervenantId', $event)">
               <option [ngValue]="null">tous</option>
               @for (c of refs.contacts(); track c.id) {
                 <option [ngValue]="c.id">{{ c.nom }}</option>
@@ -85,8 +89,8 @@
           </th>
           <th>
             <select class="filter-input"
-                    [ngModel]="columnFilters().demandeurServiceId"
-                    (ngModelChange)="setColumnFilter('demandeurServiceId', $event)">
+                    [ngModel]="columnFilters().serviceId"
+                    (ngModelChange)="setColumnFilter('serviceId', $event)">
               <option [ngValue]="null">tous</option>
               @for (s of refs.services(); track s.id) {
                 <option [ngValue]="s.id">{{ s.libelle }}</option>
@@ -95,8 +99,8 @@
           </th>
           <th>
             <select class="filter-input"
-                    [ngModel]="columnFilters().demandeurEntiteId"
-                    (ngModelChange)="setColumnFilter('demandeurEntiteId', $event)">
+                    [ngModel]="columnFilters().entiteId"
+                    (ngModelChange)="setColumnFilter('entiteId', $event)">
               <option [ngValue]="null">tous</option>
               @for (e of refs.entites(); track e.id) {
                 <option [ngValue]="e.id">{{ e.libelle }}</option>
@@ -181,8 +185,8 @@
 
             <td>
               <select class="cell-select"
-                      [ngModel]="t.demandeurId"
-                      (ngModelChange)="onTacheRefModel(t, 'demandeurId', $event)">
+                      [ngModel]="t.intervenantId"
+                      (ngModelChange)="onTacheRefModel(t, 'intervenantId', $event)">
                 <option [ngValue]="null">—</option>
                 @for (c of refs.contacts(); track c.id) {
                   <option [ngValue]="c.id">{{ c.nom }}</option>
@@ -190,9 +194,17 @@
               </select>
             </td>
 
-            <!-- Service et Entité dérivés du demandeur (lecture seule) -->
-            <td class="muted">{{ t.demandeurService ?? '—' }}</td>
-            <td class="muted">{{ t.demandeurEntite ?? '—' }}</td>
+            <td>
+              <select class="cell-select"
+                      [ngModel]="t.serviceId"
+                      (ngModelChange)="onTacheRefModel(t, 'serviceId', $event)">
+                <option [ngValue]="null">—</option>
+                @for (s of refs.services(); track s.id) {
+                  <option [ngValue]="s.id">{{ s.libelle }}</option>
+                }
+              </select>
+            </td>
+            <td class="muted">{{ t.entiteLibelle ?? '—' }}</td>
 
             <td>
               <select class="cell-select"
@@ -314,15 +326,13 @@
                 @for (a of t.actions ?? []; track a.id) {
                   <tr>
                     <td>
-                      {{ toIsoDate(a.date_action) }} :
-                      {{ a.date_action }} :
                       <input type="date" class="cell-input"
                              [value]="toIsoDate(a.date_action)"
                              (change)="onActionField(a, 'date_action', $event)">
                     </td>
                     <td>
                       <input class="cell-input"
-                             [value]="a.libelle"
+                             [value]="a.libelle ?? ''"
                              (change)="onActionField(a, 'libelle', $event)">
                     </td>
                     <td>
@@ -346,7 +356,7 @@
           </h3>
 
           <div class="row gap-sm mb-2">
-            <select class="cell-select" style="border: 1px solid var(--line); flex: 1"
+            <select class="cell-select" style="border: 1px solid var(--line); flex: 2"
                     [ngModel]="contactToAdd()"
                     (ngModelChange)="contactToAdd.set($event)">
               <option [ngValue]="null">— choisir un contact à ajouter —</option>
@@ -354,6 +364,14 @@
                 <option [ngValue]="c.id">
                   {{ c.nom }}@if (c.service_libelle) { — {{ c.service_libelle }} }
                 </option>
+              }
+            </select>
+            <select class="cell-select" style="border: 1px solid var(--line); flex: 1"
+                    [ngModel]="contactToAddRoleId()"
+                    (ngModelChange)="contactToAddRoleId.set($event)">
+              <option [ngValue]="null">— rôle (optionnel) —</option>
+              @for (r of refs.roles(); track r.id) {
+                <option [ngValue]="r.id">{{ r.libelle }}</option>
               }
             </select>
             <button class="btn primary" (click)="linkContact()" [disabled]="!contactToAdd()">
@@ -368,7 +386,7 @@
               <thead>
                 <tr>
                   <th style="min-width: 160px">Nom</th>
-                  <th>Rôle</th>
+                  <th style="min-width: 140px">Rôle (sur cette tâche)</th>
                   <th>Service</th>
                   <th>Entité</th>
                   <th>Email</th>
@@ -380,7 +398,16 @@
                 @for (c of t.contacts ?? []; track c.id) {
                   <tr>
                     <td>{{ c.nom }}</td>
-                    <td class="muted">{{ c.role ?? '—' }}</td>
+                    <td>
+                      <select class="cell-select"
+                              [ngModel]="c.role_id"
+                              (ngModelChange)="setLinkRole(c, $event)">
+                        <option [ngValue]="null">—</option>
+                        @for (r of refs.roles(); track r.id) {
+                          <option [ngValue]="r.id">{{ r.libelle }}</option>
+                        }
+                      </select>
+                    </td>
                     <td class="muted">{{ c.service_libelle ?? '—' }}</td>
                     <td class="muted">{{ c.entite_libelle ?? '—' }}</td>
                     <td class="muted">{{ c.email ?? '—' }}</td>
@@ -404,4 +431,8 @@
       </div>
     </div>
   </div>
+}
+
+@if (showOcrDialog()) {
+  <app-ocr-import-dialog (closed)="onOcrDialogClosed($event)"></app-ocr-import-dialog>
 }

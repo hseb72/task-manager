@@ -6,7 +6,7 @@ export interface ReferenceTableMeta {
   kind: RefKind;
 }
 
-/** Référentiel simple : entites, etats, domaines */
+/** Référentiel simple : entites, etats, domaines, roles */
 export interface SimpleRef {
   id: number;
   libelle: string;
@@ -22,11 +22,10 @@ export interface ServiceRef {
   entite_libelle?: string | null;
 }
 
-/** Référentiel "contact" : nom + coordonnées + service */
+/** Référentiel "contact" : nom + coordonnées + service (sans rôle) */
 export interface ContactRef {
   id: number;
   nom: string;
-  role: string | null;
   email: string | null;
   telephone: string | null;
   actif: number;
@@ -36,7 +35,6 @@ export interface ContactRef {
   entite_libelle?: string | null;
 }
 
-/** Une ligne quelconque d'un référentiel : union des trois. */
 export type RefRow = SimpleRef | ServiceRef | ContactRef;
 
 export interface Action {
@@ -46,6 +44,12 @@ export interface Action {
   libelle: string;
   description: string | null;
   created_at?: string;
+}
+
+/** Contact lié à une tâche, enrichi du rôle pour cette tâche. */
+export interface TacheContact extends ContactRef {
+  role_id: number | null;
+  role_libelle?: string | null;
 }
 
 export interface Tache {
@@ -60,22 +64,22 @@ export interface Tache {
   dureePrevue:     number | null;
   dureeAccomplie:  number | null;
 
-  demandeurId: number | null;
-  etatId:      number | null;
-  domaineId:   number | null;
+  intervenantId: number | null;
+  serviceId:     number | null;
+  etatId:        number | null;
+  domaineId:     number | null;
 
-  // Champs calculés (lecture seule)
-  demandeurNom?:        string | null;
-  demandeurServiceId?:  number | null;
-  demandeurService?:    string | null;
-  demandeurEntiteId?:   number | null;
-  demandeurEntite?:     string | null;
-  etatLibelle?:         string | null;
-  domaineLibelle?:      string | null;
+  // Champs joints (lecture seule). entiteId est dérivé du service.
+  intervenantNom?: string | null;
+  serviceLibelle?: string | null;
+  entiteId?:       number | null;
+  entiteLibelle?:  string | null;
+  etatLibelle?:    string | null;
+  domaineLibelle?: string | null;
 
   createdAt?: string;
   updatedAt?: string;
 
   actions?:  Action[];
-  contacts?: ContactRef[];
+  contacts?: TacheContact[];
 }

@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+
+<!-- ===================== -->
+<!-- ⚔️ PHYSIQUE (ÉPÉE) -->
+<!-- ===================== -->
+<g id="icon-physique" transform="translate(20,50)">
+  <line x1="0" y1="-15" x2="0" y2="15"
+        stroke="#B23A3A" stroke-width="2.5"/>
+  <polygon points="0,-20 -6,-10 6,-10"
+           fill="#B23A3A"/>
+  <line x1="-8" y1="10" x2="8" y2="10"
+        stroke="#B23A3A" stroke-width="2.5"/>
+</g>
+
+<!-- ===================== -->
+<!-- 🔮 PSYCHIQUE (ŒIL GLYPHE) -->
+<!-- ===================== -->
+<g id="icon-psychique" transform="translate(80,50)">
+  <!-- cercle -->
+  <circle cx="0" cy="0" r="14"
+          stroke="#6A5ACD" stroke-width="2.5"
+          fill="none"/>
+
+  <!-- œil -->
+  <ellipse cx="0" cy="0" rx="8" ry="4"
+           stroke="#6A5ACD" stroke-width="2.5"
+           fill="none"/>
+
+  <!-- pupille -->
+  <circle cx="0" cy="0" r="2.5"
+          fill="#6A5ACD"/>
+
+  <!-- glyphes -->
+  <line x1="0" y1="-18" x2="0" y2="-14"
+        stroke="#6A5ACD" stroke-width="2"/>
+  <line x1="0" y1="18" x2="0" y2="14"
+        stroke="#6A5ACD" stroke-width="2"/>
+</g>
+
+<!-- ===================== -->
+<!-- ➤ MOUVEMENT (FLÈCHE) -->
+<!-- ===================== -->
+<g id="icon-mouvement" transform="translate(140,50)">
+  <line x1="-10" y1="0" x2="10" y2="0"
+        stroke="#3A7D44" stroke-width="2.5"/>
+  <polygon points="10,0 2,-6 2,6"
+           fill="#3A7D44"/>
+</g>
+
+</svg>

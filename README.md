@@ -41,11 +41,25 @@ Le serveur écoute sur `http://localhost:3000`. Au premier démarrage, il :
 |-------------|---------------------------------------------------------------------|
 | `taches`    | Table centrale (ID, libellé, description, dates, durées, FK)        |
 | `actions`   | 0..N actions menées sur une tâche (CASCADE à la suppression)        |
-| `contacts`  | 0..N contacts liés à une tâche (CASCADE à la suppression)           |
-| `demandeurs`, `entites`, `services`, `etats`, `domaines` | Référentiels (listes déroulantes) |
+| `tache_contacts` | Liaison N:N entre tâches et contacts, **portant un rôle**     |
+| `entites`, `services`, `contacts`, `roles`, `etats`, `domaines` | Référentiels (listes déroulantes) |
+
+**Relations clés** :
+- Une tâche référence un **intervenant** (`intervenant_id` → `contacts`), un **service** et une **entité** propres, un **état** et un **domaine**.
+- Un **service** est rattaché à une **entité**.
+- Un **contact** est rattaché à un **service**.
+- Un **rôle** caractérise la liaison entre une tâche et un contact (un même contact peut tenir des rôles différents selon la tâche).
 
 Les tâches référencent les référentiels via des clés étrangères `ON DELETE SET NULL` :
-si une valeur de référentiel est supprimée, la tâche conserve son existence mais le champ correspondant est vidé.
+si une valeur de référentiel est supprimée, les tâches conservent leur existence mais le champ correspondant est vidé.
+
+### Migration depuis l'ancien modèle
+
+Les bases existantes sont migrées automatiquement au démarrage :
+- `taches.demandeur_id` → renommée en `taches.intervenant_id`
+- ajout de `taches.service_id` et `taches.entite_id`
+- ajout de `tache_contacts.role_id`
+- création du référentiel `roles` ; les anciens libellés de rôle texte sur `contacts` sont migrés en valeurs du référentiel, puis la colonne `contacts.role` est supprimée.
 
 ### API REST
 
@@ -111,10 +125,9 @@ Les fichiers sont produits dans `dist/task-manager-frontend`.
 ### a) Page principale — `Tâches`
 Tableau dense de toutes les tâches en cours, avec édition directe des cellules :
 - Champs texte (libellé) éditables en place ;
-- Listes déroulantes (état, demandeur, domaine) ;
+- Listes déroulantes (état, intervenant, service, entité, domaine) ;
 - Champs date (déclaration, échéance, fin) ;
-- Champs numériques (durée prévue, durée accomplie) ;
-- Service et Entité du demandeur affichés automatiquement.
+- Champs numériques (durée prévue, durée accomplie).
 
 Chaque modification est envoyée au backend dès la perte de focus / changement.
 
@@ -136,10 +149,12 @@ Un champ de **recherche globale** complète les filtres par colonne.
 - **↑ Remplacer** : importe un `.json.gz` (ou `.json`) en vidant la base d'abord. Confirmation requise. L'action choisie devient la nouvelle action par défaut du bouton
 - **↑ Fusionner** : importe en mode `INSERT OR REPLACE` (les enregistrements existants avec le même ID sont écrasés, les autres préservés)
 
+**🖼 Import depuis image (OCR)** : bouton dédié qui ouvre un dialogue où on dépose ou colle (Ctrl+V) une capture d'écran (Outlook, Teams, etc.). [Tesseract.js](https://tesseract.projectnaptha.com/) reconnaît le texte localement (modèles français + anglais), des heuristiques détectent le sujet, les dates de déclaration/échéance et les contacts (avec leurs rôles éventuels via la signature). L'utilisateur **valide manuellement** les champs, choisit pour chaque contact détecté de le **lier à un contact existant**, de le **créer** dans le référentiel, ou de l'**ignorer**, désigne un demandeur, puis crée la tâche en un clic. Les modèles Tesseract (~10 Mo) sont téléchargés au premier usage et mis en cache par le navigateur.
+
 Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
   - description longue éditable en **WYSIWYG** (gras, italique, souligné, listes, lien, etc.),
   - liste des actions menées (date, libellé, et description WYSIWYG également) — ajout/édition/suppression,
-  - liste des contacts liés (ajout via le sélecteur du référentiel, retrait sans suppression du contact lui-même).
+  - liste des contacts liés (ajout via le sélecteur du référentiel **avec un rôle optionnel pour la tâche**, modification du rôle directement dans le tableau, retrait sans suppression du contact lui-même).
 
 ### b) Page `Référentiels`
 - Menu latéral pour basculer entre les référentiels.

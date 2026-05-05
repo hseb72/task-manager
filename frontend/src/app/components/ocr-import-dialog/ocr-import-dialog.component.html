@@ -1,0 +1,276 @@
+<div class="modal-backdrop" (click)="cancel()" (paste)="onPaste($event)">
+  <div class="modal ocr-modal" (click)="$event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <h2>Importer une tâche depuis une image</h2>
+        <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
+          @switch (step()) {
+            @case ('upload')    { Déposez une capture d'écran (Outlook, Teams…) ou collez-la depuis le presse-papier. }
+            @case ('analyzing') { Reconnaissance du texte en cours… }
+            @case ('review')    { Vérifiez et ajustez les informations détectées avant de valider. }
+            @case ('creating')  { Création de la tâche et des contacts… }
+            @case ('done')      { Tâche créée avec succès. }
+            @case ('error')     { Une erreur s'est produite. }
+          }
+        </div>
+      </div>
+      <button class="icon-btn" (click)="cancel()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- ============================================================== -->
+      <!-- Étape : UPLOAD                                                  -->
+      <!-- ============================================================== -->
+      @if (step() === 'upload') {
+        <div class="drop-zone" (drop)="onImageDrop($event)" (dragover)="onDragOver($event)">
+          <div class="drop-icon">📄</div>
+          <div class="drop-text">Glissez une image ici, collez (Ctrl+V), ou&nbsp;:</div>
+          <label class="btn primary" style="display: inline-block">
+            <input type="file" accept="image/*" style="display: none" (change)="onFileSelected($event)">
+            Sélectionner une image
+          </label>
+          <div class="muted mt-2" style="font-size: 0.78rem">
+            Formats supportés : PNG, JPEG, GIF, BMP. Mieux : captures d'écran nettes,<br>
+            avec en-têtes de mail visibles (« De: », « Objet: », etc.).
+          </div>
+        </div>
+      }
+
+      <!-- ============================================================== -->
+      <!-- Étape : ANALYZING                                               -->
+      <!-- ============================================================== -->
+      @if (step() === 'analyzing') {
+        <div style="text-align: center; padding: 2rem">
+          @if (imagePreview(); as img) {
+            <img [src]="img" alt="aperçu" class="image-preview" style="max-height: 200px; margin-bottom: 1.2rem">
+          }
+          <div class="progress-bar"><div class="progress-fill" [style.width.%]="ocrProgress()"></div></div>
+          <div class="muted mt-1">{{ ocrStatus() }} ({{ ocrProgress() }}%)</div>
+          <div class="muted mt-2" style="font-size: 0.78rem; font-style: italic">
+            Le premier lancement peut prendre 30 à 60s (téléchargement des modèles).
+          </div>
+        </div>
+      }
+
+      <!-- ============================================================== -->
+      <!-- Étape : REVIEW                                                  -->
+      <!-- ============================================================== -->
+      @if (step() === 'review' && extracted(); as data) {
+        <div class="grid-2">
+          <!-- Colonne gauche : aperçu image + texte brut -->
+          <div>
+            @if (imagePreview(); as img) {
+              <img [src]="img" alt="aperçu" class="image-preview">
+            }
+            <details class="mt-2">
+              <summary class="muted" style="font-size: 0.78rem; cursor: pointer">
+                Voir le texte OCR brut (confiance : {{ data.confidence | number: '1.0-0' }}%)
+              </summary>
+              <pre class="raw-text">{{ data.rawText }}</pre>
+            </details>
+          </div>
+
+          <!-- Colonne droite : champs éditables de la tâche -->
+          <div>
+            <label>Libellé</label>
+            <input [value]="libelle()" (input)="libelle.set(v($event))">
+
+            <label class="mt-2">Description</label>
+            <textarea rows="4" [value]="description()" (input)="description.set(v($event))"></textarea>
+
+            <div class="grid-2 mt-2">
+              <div>
+                <label>Date de déclaration</label>
+                <input type="date" [value]="dateDeclaration()" (input)="dateDeclaration.set(v($event))">
+              </div>
+              <div>
+                <label>Date d'échéance</label>
+                <input type="date" [value]="dateEcheance()" (input)="dateEcheance.set(v($event))">
+              </div>
+            </div>
+
+            <div class="grid-2 mt-2">
+              <div>
+                <label>État</label>
+                <select [ngModel]="etatId()" (ngModelChange)="etatId.set($event)">
+                  <option [ngValue]="null">—</option>
+                  @for (val of refs.etats(); track val.id) {
+                    <option [ngValue]="val.id">{{ val.libelle }}</option>
+                  }
+                </select>
+              </div>
+              <div>
+                <label>Domaine</label>
+                <select [ngModel]="domaineId()" (ngModelChange)="domaineId.set($event)">
+                  <option [ngValue]="null">—</option>
+                  @for (val of refs.domaines(); track val.id) {
+                    <option [ngValue]="val.id">{{ val.libelle }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="mt-2">
+              <label>Service <span class="muted" style="font-weight: normal; text-transform: none; letter-spacing: 0">(l'entité en sera dérivée)</span></label>
+              <select [ngModel]="serviceId()" (ngModelChange)="serviceId.set($event)">
+                <option [ngValue]="null">—</option>
+                @for (s of refs.services(); track s.id) {
+                  <option [ngValue]="s.id">{{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }</option>
+                }
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Contacts détectés -->
+        <div class="card mt-2">
+          <h3>Contacts détectés ({{ contactDecisions().length }})</h3>
+          @if (contactDecisions().length === 0) {
+            <div class="empty-state" style="font-size: 0.85rem">Aucun contact identifié dans l'image.</div>
+          } @else {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 30px" title="Désigner comme intervenant principal"></th>
+                  <th>Détecté</th>
+                  <th>Source</th>
+                  <th style="min-width: 280px">Action</th>
+                  <th style="min-width: 180px">Rôle (sur cette tâche)</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (d of contactDecisions(); track $index; let i = $index) {
+                  <tr [class.skipped]="d.mode === 'skip'">
+                    <td>
+                      <input type="radio" name="intervenant"
+                             [checked]="intervenantIdx() === i"
+                             [disabled]="d.mode === 'skip'"
+                             (change)="intervenantIdx.set(i)"
+                             title="Désigner comme intervenant de la tâche">
+                    </td>
+                    <td>
+                      <strong>{{ d.detected.nom }}</strong>
+                      @if (d.detected.email) {
+                        <div class="muted" style="font-size: 0.78rem">{{ d.detected.email }}</div>
+                      }
+                    </td>
+                    <td class="muted" style="font-size: 0.8rem">{{ decisionSourceLabel(d) }}</td>
+                    <td>
+                      <div class="row gap-sm mb-1">
+                        <label class="row gap-sm" style="margin-bottom: 0">
+                          <input type="radio" [name]="'mode-' + i" [checked]="d.mode === 'existing'"
+                                 (change)="setDecisionMode(i, 'existing')">
+                          <span>Lier à existant</span>
+                        </label>
+                        <label class="row gap-sm" style="margin-bottom: 0">
+                          <input type="radio" [name]="'mode-' + i" [checked]="d.mode === 'create'"
+                                 (change)="setDecisionMode(i, 'create')">
+                          <span>Créer</span>
+                        </label>
+                        <label class="row gap-sm" style="margin-bottom: 0">
+                          <input type="radio" [name]="'mode-' + i" [checked]="d.mode === 'skip'"
+                                 (change)="setDecisionMode(i, 'skip')">
+                          <span>Ignorer</span>
+                        </label>
+                      </div>
+
+                      @if (d.mode === 'existing') {
+                        <select [ngModel]="d.existingId" (ngModelChange)="setDecisionExistingId(i, $event)">
+                          <option [ngValue]="null">— sélectionner —</option>
+                          @for (c of refs.contacts(); track c.id) {
+                            <option [ngValue]="c.id">{{ c.nom }}@if (c.email) { ({{ c.email }}) }</option>
+                          }
+                        </select>
+                      } @else if (d.mode === 'create') {
+                        <div class="grid-2 gap-sm">
+                          <input placeholder="Nom" [value]="d.draft.nom"
+                                 (input)="setDecisionDraft(i, 'nom', v($event))">
+                          <input type="email" placeholder="Email" [value]="d.draft.email"
+                                 (input)="setDecisionDraft(i, 'email', v($event))">
+                          <select [ngModel]="d.draft.service_id"
+                                  (ngModelChange)="setDecisionDraft(i, 'service_id', $event)">
+                            <option [ngValue]="null">— service —</option>
+                            @for (s of refs.services(); track s.id) {
+                              <option [ngValue]="s.id">{{ s.libelle }}</option>
+                            }
+                          </select>
+                        </div>
+                      }
+                    </td>
+                    <td>
+                      @if (d.mode !== 'skip') {
+                        <select [ngModel]="d.roleId" (ngModelChange)="setDecisionRoleId(i, $event)">
+                          <option [ngValue]="null">— aucun / nouveau —</option>
+                          @for (r of refs.roles(); track r.id) {
+                            <option [ngValue]="r.id">{{ r.libelle }}</option>
+                          }
+                        </select>
+                        @if (!d.roleId) {
+                          <input class="mt-1" placeholder="Nouveau rôle (créera la valeur)"
+                                 [value]="d.roleLibelle"
+                                 (input)="setDecisionRoleLibelle(i, v($event))">
+                        }
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+            <div class="muted mt-1" style="font-size: 0.78rem">
+              Le contact coché à gauche sera désigné comme <strong>intervenant</strong> de la tâche ;
+              tous les contacts conservés (intervenant inclus) seront liés à la tâche avec leur rôle respectif.
+              Saisir un rôle absent du référentiel le créera automatiquement.
+            </div>
+          }
+        </div>
+
+        @if (errorMsg()) {
+          <div class="card mt-2" style="border-left: 3px solid var(--danger); color: var(--danger)">
+            {{ errorMsg() }}
+          </div>
+        }
+      }
+
+      <!-- ============================================================== -->
+      <!-- Étape : CREATING                                                -->
+      <!-- ============================================================== -->
+      @if (step() === 'creating') {
+        <div style="text-align: center; padding: 2rem">
+          <div class="muted">Création en cours…</div>
+        </div>
+      }
+
+      <!-- ============================================================== -->
+      <!-- Étape : DONE                                                    -->
+      <!-- ============================================================== -->
+      @if (step() === 'done') {
+        <div style="text-align: center; padding: 2rem; color: var(--ok)">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem">✓</div>
+          <div>Tâche créée avec succès.</div>
+        </div>
+      }
+
+      <!-- ============================================================== -->
+      <!-- Étape : ERROR                                                   -->
+      <!-- ============================================================== -->
+      @if (step() === 'error') {
+        <div class="card" style="border-left: 3px solid var(--danger)">
+          <div style="color: var(--danger); margin-bottom: 0.5rem"><strong>Échec</strong></div>
+          {{ errorMsg() }}
+        </div>
+      }
+    </div>
+
+    <div class="modal-foot">
+      @if (step() === 'review') {
+        <button class="btn ghost" (click)="reset()">↩ Recommencer</button>
+      }
+      <button class="btn" (click)="cancel()">Annuler</button>
+      @if (step() === 'review') {
+        <button class="btn primary" (click)="confirm()" [disabled]="!libelle().trim()">
+          Créer la tâche
+        </button>
+      }
+    </div>
+  </div>
+</div>
