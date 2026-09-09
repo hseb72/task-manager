@@ -101,6 +101,8 @@ async function runMigrations() {
       ['auth_user',   'auth_user TEXT'],
       ['auth_secret', 'auth_secret TEXT'],
       ['auth_header', 'auth_header TEXT'],
+      ['url_uid',     'url_uid TEXT'],
+      ['uid_regex',   'uid_regex TEXT'],
     ];
     for (const [col, ddl] of cols) {
       if (!await columnExists('sources_web', col)) {
@@ -191,6 +193,8 @@ export async function initDatabase() {
       auth_user   TEXT,
       auth_secret TEXT,
       auth_header TEXT,
+      url_uid     TEXT,
+      uid_regex   TEXT,
       UNIQUE (libelle)
     )
   `);

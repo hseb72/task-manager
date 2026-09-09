@@ -53,6 +53,10 @@ export interface SourceRef {
   auth_secret_set?: number;
   /** Écriture seule : nouveau secret (mot de passe / jeton / cookie). */
   auth_secret?: string | null;
+  /** 2ᵉ étape optionnelle : gabarit d'URL de détail contenant {uid}. */
+  url_uid: string | null;
+  /** Regex (groupe 1) pour extraire l'UID de la page de l'étape 1. */
+  uid_regex: string | null;
 }
 
 export type RefRow = SimpleRef | ServiceRef | ContactRef | SourceRef;
@@ -60,6 +64,10 @@ export type RefRow = SimpleRef | ServiceRef | ContactRef | SourceRef;
 /** Résultat d'un enrichissement de contact depuis une source web. */
 export interface EnrichResult {
   url: string;
+  /** URL de l'étape 1 (recherche par nom) quand un enchaînement UID est utilisé. */
+  url1?: string | null;
+  /** UID extrait de l'étape 1 (si enchaînement à deux étapes). */
+  uid?: string | null;
   source: { id: number; libelle: string };
   deduced: { service: string | null; entite: string | null };
   serviceMatch: { id: number; libelle: string; entite_id: number | null; entite_libelle?: string | null } | null;

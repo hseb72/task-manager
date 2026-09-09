@@ -54,14 +54,69 @@ function stripTags(html) {
     .trim();
 }
 
-/** Construit l'URL finale à partir du gabarit et du nom. */
-function buildUrl(template, nom) {
-  const enc = encodeURIComponent(nom);
-  if (/\{\s*(nom|name|q)\s*\}/i.test(template)) {
-    return template.replace(/\{\s*(nom|name|q)\s*\}/gi, enc);
+/**
+ * Applique un gabarit d'URL : remplace les marqueurs {clé} par les valeurs
+ * fournies (URL-encodées). Renvoie l'URL et si un marqueur a été utilisé.
+ */
+function applyTemplate(template, params) {
+  let url = String(template);
+  let used = false;
+  for (const [key, value] of Object.entries(params)) {
+    const re = new RegExp('\\{\\s*' + key + '\\s*\\}', 'gi');
+    if (re.test(url)) { url = url.replace(re, encodeURIComponent(value)); used = true; }
   }
+  return { url, used };
+}
+
+/** URL de l'étape 1 (recherche par nom). */
+function buildUrl(template, nom) {
+  const { url, used } = applyTemplate(template, { nom, name: nom, q: nom });
+  if (used) return url;
   const sep = template.includes('?') ? '&' : '?';
-  return template + sep + 'q=' + enc;
+  return template + sep + 'q=' + encodeURIComponent(nom);
+}
+
+/** URL de l'étape 2 (détail par UID). */
+function buildUidUrl(template, uid, nom) {
+  const { url, used } = applyTemplate(template, { uid, id: uid, nom, name: nom });
+  if (used) return url;
+  const sep = template.includes('?') ? '&' : '?';
+  return template + sep + 'uid=' + encodeURIComponent(uid);
+}
+
+/** Clés de libellé pouvant porter l'identifiant unique du contact. */
+const UID_KEYS = ['uid', 'matricule', 'identifiant', 'user id', 'userid', 'login', 'ntid'];
+
+/**
+ * Extrait l'UID de la page de l'étape 1.
+ *  1. via `uid_regex` (groupe 1 si présent, sinon correspondance entière) ;
+ *  2. sinon via une paire libellé/valeur (UID, matricule, identifiant…) ;
+ *  3. sinon via un lien href contenant uid=/id= ou /users/<id>.
+ */
+function extractUid(html, uidRegex) {
+  if (uidRegex) {
+    try {
+      const m = new RegExp(uidRegex, 'i').exec(html);
+      if (m) return String(m[1] ?? m[0]).trim();
+    } catch { /* regex invalide : on ignore et on passe aux heuristiques */ }
+  }
+
+  const pairs = htmlToPairs(html);
+  for (const p of pairs) {
+    const k = norm(p.key);
+    if (!p.value) continue;
+    if (k === 'uid' || k === 'id' || UID_KEYS.some(kw => k.includes(kw))) {
+      return p.value.trim();
+    }
+  }
+
+  const hrefs = [...String(html).matchAll(/href\s*=\s*["']([^"']+)["']/gi)].map(m => m[1]);
+  for (const h of hrefs) {
+    const m = h.match(/(?:uid|matricule|id)=([A-Za-z0-9._~-]+)/i)
+           || h.match(/\/(?:uid|matricule|users?)\/([A-Za-z0-9._~-]+)/i);
+    if (m) return m[1];
+  }
+  return null;
 }
 
 /**
@@ -146,18 +201,46 @@ router.post('/', async (req, res, next) => {
       });
     }
 
-    const url = buildUrl(String(src.url), nom);
+    const timeoutMs = src.rendu_js ? 20000 : 10000;
+    const url1 = buildUrl(String(src.url), nom);
+    const useUidStep = !!(src.url_uid && String(src.url_uid).trim());
 
-    // Récupération de la page côté serveur (fetch, ou navigateur headless si
-    // la source demande un rendu JavaScript), avec authentification éventuelle.
-    let html;
+    const fetchOr502 = async (u, etape) => {
+      try {
+        return await fetchPage(src, u, { timeoutMs });
+      } catch (e) {
+        const reason = e?.name === 'AbortError' || /Timeout/i.test(e?.message ?? '')
+          ? 'délai dépassé'
+          : (e?.message ?? String(e));
+        const suffix = etape ? ` (étape ${etape})` : '';
+        const err = new Error('Impossible de joindre la source' + suffix + ' : ' + reason);
+        err.url = u;
+        throw err;
+      }
+    };
+
+    // Étape 1 : recherche par nom → page/tuile contenant l'UID.
+    // Étape 2 (optionnelle) : détail par UID → service/entité.
+    let html, url, uid = null;
     try {
-      html = await fetchPage(src, url, { timeoutMs: src.rendu_js ? 20000 : 10000 });
+      const html1 = await fetchOr502(url1, useUidStep ? 1 : null);
+      if (useUidStep) {
+        uid = extractUid(html1, src.uid_regex);
+        if (!uid) {
+          return res.status(422).json({
+            error: 'UID introuvable sur la page de recherche (étape 1). '
+                 + 'Précisez l\'« extraction UID » de la source.',
+            url: url1,
+          });
+        }
+        url = buildUidUrl(String(src.url_uid), uid, nom);
+        html = await fetchOr502(url, 2);
+      } else {
+        html = html1;
+        url = url1;
+      }
     } catch (e) {
-      const reason = e?.name === 'AbortError' || /Timeout/i.test(e?.message ?? '')
-        ? 'délai dépassé'
-        : (e?.message ?? String(e));
-      return res.status(502).json({ error: 'Impossible de joindre la source : ' + reason, url });
+      return res.status(502).json({ error: e.message, url: e.url ?? url1 });
     }
 
     // Déduction service / entité
@@ -182,6 +265,8 @@ router.post('/', async (req, res, next) => {
 
     res.json({
       url,
+      url1: useUidStep ? url1 : null,
+      uid,
       source: { id: src.id, libelle: src.libelle },
       deduced: { service: serviceText || null, entite: entiteText || null },
       serviceMatch: serviceMatch

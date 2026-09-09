@@ -18,6 +18,8 @@ interface SourceEdit {
   auth_header: string;
   secret: string;
   secretSet: boolean;
+  url_uid: string;
+  uid_regex: string;
 }
 
 /** État du panneau d'enrichissement d'un contact. */
@@ -240,6 +242,8 @@ export class RefsPageComponent implements OnInit {
       auth_header: v.auth_header ?? '',
       secret: '',
       secretSet: !!v.auth_secret_set,
+      url_uid: v.url_uid ?? '',
+      uid_regex: v.uid_regex ?? '',
     });
   }
   updateSourceEdit(patch: Partial<SourceEdit>) {
@@ -254,6 +258,8 @@ export class RefsPageComponent implements OnInit {
       auth_type: e.auth_type,
       auth_user: e.auth_type === 'basic' ? (e.auth_user.trim() || null) : null,
       auth_header: e.auth_type === 'header' ? (e.auth_header.trim() || null) : null,
+      url_uid: e.url_uid.trim() || null,
+      uid_regex: e.uid_regex.trim() || null,
     };
     // Le secret n'est envoyé que s'il a été saisi (sinon inchangé côté serveur).
     if (e.secret) body.auth_secret = e.secret;

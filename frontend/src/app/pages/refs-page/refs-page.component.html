@@ -350,7 +350,15 @@
           <div class="mb-2" style="font-size: 0.82rem">
             Source : <strong>{{ r.source.libelle }}</strong> —
             <a [href]="r.url" target="_blank" rel="noopener">ouvrir la page ↗</a>
+            @if (r.url1) {
+              · <a [href]="r.url1" target="_blank" rel="noopener">étape 1 ↗</a>
+            }
           </div>
+          @if (r.uid) {
+            <div class="mb-2" style="font-size: 0.82rem">
+              UID détecté : <strong class="mono">{{ r.uid }}</strong>
+            </div>
+          }
 
           <table class="data-table">
             <tbody>
@@ -426,6 +434,27 @@
                  (change)="updateSourceEdit({ rendu_js: !e.rendu_js })">
           <span>Rendu JavaScript (navigateur headless — pour les pages dont le contenu est injecté en JS)</span>
         </label>
+
+        <div class="card" style="margin-bottom: 0.8rem; padding: 0.7rem">
+          <label style="margin-bottom: 0.2rem">Recherche en deux étapes (optionnel)</label>
+          <div class="muted mb-2" style="font-size: 0.76rem">
+            Quand la 1ʳᵉ page (recherche par nom) ne fournit qu'un <strong>UID</strong>, indiquez ici
+            l'URL de détail à enchaîner (marqueur <code>&#123;uid&#125;</code>) et, si besoin, la règle
+            d'extraction de l'UID.
+          </div>
+          <label style="font-weight: normal">URL de détail (2ᵉ étape)</label>
+          <input class="mono" [value]="e.url_uid"
+                 (input)="updateSourceEdit({ url_uid: v($event) })"
+                 placeholder="https://intranet/fiche?uid={uid}">
+          <label class="mt-2" style="font-weight: normal">Extraction UID — regex (groupe 1)</label>
+          <input class="mono" [value]="e.uid_regex"
+                 (input)="updateSourceEdit({ uid_regex: v($event) })"
+                 placeholder="uid[&quot;:=\s]+([A-Za-z0-9]+)">
+          <div class="muted mt-1" style="font-size: 0.74rem">
+            Laissée vide, l'UID est recherché automatiquement (libellé « UID / matricule / identifiant »
+            ou lien contenant <code>uid=</code>).
+          </div>
+        </div>
 
         <label>Authentification</label>
         <select [ngModel]="e.auth_type" (ngModelChange)="updateSourceEdit({ auth_type: $event })">

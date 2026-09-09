@@ -48,6 +48,7 @@ function selectQuery(table) {
     // est défini.
     return `
       SELECT id, libelle, url, actif, rendu_js, auth_type, auth_user, auth_header,
+             url_uid, uid_regex,
              CASE WHEN auth_secret IS NOT NULL AND auth_secret <> '' THEN 1 ELSE 0 END AS auth_secret_set
       FROM sources_web
       ORDER BY libelle COLLATE NOCASE ASC
@@ -82,6 +83,7 @@ function selectByIdQuery(table) {
   if (kind === 'source') {
     return `
       SELECT id, libelle, url, actif, rendu_js, auth_type, auth_user, auth_header,
+             url_uid, uid_regex,
              CASE WHEN auth_secret IS NOT NULL AND auth_secret <> '' THEN 1 ELSE 0 END AS auth_secret_set
       FROM sources_web WHERE id = ?
     `;
@@ -161,8 +163,9 @@ router.post('/:table', ensureTable, async (req, res, next) => {
       if (!url)     return res.status(400).json({ error: 'URL requise' });
       result = await db.execute({
         sql: `INSERT INTO sources_web
-              (libelle, url, actif, rendu_js, auth_type, auth_user, auth_secret, auth_header)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              (libelle, url, actif, rendu_js, auth_type, auth_user, auth_secret, auth_header,
+               url_uid, uid_regex)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           libelle, url,
           b.actif === 0 ? 0 : 1,
@@ -171,6 +174,8 @@ router.post('/:table', ensureTable, async (req, res, next) => {
           b.auth_user || null,
           b.auth_secret || null,
           b.auth_header || null,
+          b.url_uid || null,
+          b.uid_regex || null,
         ],
       });
     }
@@ -207,7 +212,8 @@ router.put('/:table/:id', ensureTable, async (req, res, next) => {
                  actif: 'actif', service_id: 'service_id' },
       source:  { libelle: 'libelle', url: 'url', actif: 'actif', rendu_js: 'rendu_js',
                  auth_type: 'auth_type', auth_user: 'auth_user',
-                 auth_secret: 'auth_secret', auth_header: 'auth_header' },
+                 auth_secret: 'auth_secret', auth_header: 'auth_header',
+                 url_uid: 'url_uid', uid_regex: 'uid_regex' },
     };
     const map = fieldMaps[kind];
 
