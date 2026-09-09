@@ -78,6 +78,34 @@
 }
 
 /* ==========================================================================
+   Zone de description (grande zone de texte = corps de la tâche)
+   ========================================================================== */
+.desc-textarea {
+  min-height: 9rem;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+/* ==========================================================================
+   Contacts détectés — cible de glisser-déposer
+   ========================================================================== */
+.contacts-drop {
+  transition: outline-color 0.15s ease, background 0.15s ease;
+  outline: 2px dashed transparent;
+  outline-offset: 2px;
+}
+.contacts-drop.drop-active {
+  outline-color: var(--accent);
+  background: rgba(122, 76, 176, 0.06);
+}
+.drop-hint {
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+  font-style: italic;
+  margin-bottom: 0.6rem;
+}
+
+/* ==========================================================================
    Tableau des décisions de contacts
    ========================================================================== */
 .data-table tr.skipped {

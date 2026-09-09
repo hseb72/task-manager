@@ -64,7 +64,7 @@ const ZONE_COLORS: Record<ZoneKind, { stroke: string; fill: string; label: strin
           </span>
         }
         <span class="legend-hint">
-          Astuce : glissez une zone vers un champ du formulaire pour corriger la détection.
+          Astuce : glissez une zone vers « Contacts détectés » pour ajouter un contact manquant.
         </span>
       </div>
     </div>

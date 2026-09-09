@@ -14,7 +14,7 @@ import { OcrZoneOverlayComponent } from '../ocr-zone-overlay/ocr-zone-overlay.co
 import { firstValueFrom } from 'rxjs';
 
 interface ContactDecision {
-  detected: { nom: string; email?: string; role?: string };
+  detected: { nom: string; email?: string; role?: string; source?: 'sender' | 'recipient' | 'cc' | 'mentioned' };
   /** existing : on lie un contact existant ; create : on crée le contact ; skip : ignorer */
   mode: 'existing' | 'create' | 'skip';
   existingId: number | null;
@@ -188,8 +188,15 @@ export class OcrImportDialogComponent {
     });
     this.contactDecisions.set(decisions);
 
-    const senderIdx = decisions.findIndex(x => x.detected.role?.toLowerCase().includes('sponsor') || x.detected.role?.toLowerCase().includes('owner'));
-    this.intervenantIdx.set(senderIdx >= 0 ? senderIdx : (decisions.length > 0 ? 0 : null));
+    // Intervenant principal : l'organisateur de la réunion (source 'sender') en
+    // priorité, sinon un rôle « sponsor / owner », sinon le premier contact.
+    let mainIdx = decisions.findIndex(x => x.detected.source === 'sender');
+    if (mainIdx < 0) {
+      mainIdx = decisions.findIndex(x =>
+        x.detected.role?.toLowerCase().includes('sponsor') ||
+        x.detected.role?.toLowerCase().includes('owner'));
+    }
+    this.intervenantIdx.set(mainIdx >= 0 ? mainIdx : (decisions.length > 0 ? 0 : null));
   }
 
   private findExistingContact(c: { nom: string; email?: string }): ContactRef | undefined {
@@ -365,6 +372,89 @@ export class OcrImportDialogComponent {
   }
 
   decisionSourceLabel(d: ContactDecision): string {
-    return d.detected.role ?? '—';
+    if (d.detected.role) return d.detected.role;
+    switch (d.detected.source) {
+      case 'sender':    return 'Organisateur';
+      case 'recipient': return 'Participant';
+      case 'cc':        return 'En copie';
+      default:          return '—';
+    }
+  }
+
+  /* ====================================================================== */
+  /*  Glisser-déposer d'un texte de l'image vers les contacts détectés       */
+  /* ====================================================================== */
+
+  /** Vrai quand un glissement survole la zone « Contacts détectés ». */
+  contactsDropActive = signal(false);
+
+  onContactsDragOver(ev: DragEvent) {
+    ev.preventDefault();
+    if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+    this.contactsDropActive.set(true);
+  }
+  onContactsDragLeave() {
+    this.contactsDropActive.set(false);
+  }
+  onContactsDrop(ev: DragEvent) {
+    ev.preventDefault();
+    this.contactsDropActive.set(false);
+
+    // Source prioritaire : la zone en cours de glissement (depuis l'overlay).
+    const zone = this.dragSrv.dragging();
+    let text = '';
+    let zoneId: string | undefined;
+    if (zone) {
+      text = (zone.value ?? '').trim();
+      zoneId = zone.id;
+    }
+    // Sinon, un texte simple déposé (sélection dans le texte OCR brut, autre appli…).
+    if (!text) text = (ev.dataTransfer?.getData('text/plain') ?? '').trim();
+    // Ultime recours : la sélection courante de la fenêtre.
+    if (!text) text = (window.getSelection?.()?.toString() ?? '').trim();
+
+    this.dragSrv.end();
+    if (!text) return;
+    this.addContactFromText(text, zoneId);
+  }
+
+  /** Ajoute un contact détecté à partir d'un fragment de texte glissé. */
+  addContactFromText(text: string, zoneId?: string) {
+    const parsed = this.layoutSrv.parsePerson(text);
+    const nom = parsed.nom || (parsed.email ? parsed.email.split('@')[0]! : text.trim());
+    if (!nom) return;
+
+    const detected = {
+      nom,
+      email: parsed.email || undefined,
+      role: undefined,
+      source: 'recipient' as const,
+    };
+    const match = this.findExistingContact(detected);
+    const decision: ContactDecision = {
+      detected,
+      mode: match ? 'existing' : 'create',
+      existingId: match?.id ?? null,
+      roleId: null,
+      roleLibelle: '',
+      draft: { nom, email: parsed.email ?? '', service_id: null },
+      zoneId,
+    };
+    this.contactDecisions.set([...this.contactDecisions(), decision]);
+
+    // Bascule l'intervenant sur ce contact s'il n'y en avait aucun.
+    if (this.intervenantIdx() == null) {
+      this.intervenantIdx.set(this.contactDecisions().length - 1);
+    }
+  }
+
+  /** Retire une décision de contact (ex : ajout manuel erroné). */
+  removeDecision(idx: number) {
+    const arr = this.contactDecisions().filter((_, i) => i !== idx);
+    this.contactDecisions.set(arr);
+    const cur = this.intervenantIdx();
+    if (cur == null) return;
+    if (cur === idx) this.intervenantIdx.set(arr.length ? 0 : null);
+    else if (cur > idx) this.intervenantIdx.set(cur - 1);
   }
 }

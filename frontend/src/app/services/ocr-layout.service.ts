@@ -26,6 +26,10 @@ export interface DetectedZone {
   confidence: number;
   /** Lignes OCR sources (pour debug et édition manuelle). */
   sourceLines: OcrLine[];
+  /** Pour 'contact' : provenance détectée (organisateur, participant…). */
+  contactSource?: 'sender' | 'recipient' | 'cc' | 'mentioned';
+  /** Pour 'contact' : email éventuellement reconnu. */
+  contactEmail?: string;
 }
 
 /** Données structurées finales (consommées par le formulaire de création). */
@@ -133,6 +137,41 @@ const KNOWN_ROLES = new Set([
   'suiveur', 'validateur', 'informateur',
 ]);
 
+/**
+ * Libellés (FR + EN) qui, dans une invitation / un détail de réunion Teams ou
+ * Outlook, désignent l'organisateur. Le contact rattaché deviendra l'intervenant
+ * principal de la tâche.
+ */
+const ORGANIZER_LABELS = new Set([
+  'organizer', 'organiser', 'organisateur', 'organized by', 'organise par',
+  'organisee par', 'meeting organizer', 'organizer:', 'host', 'hote',
+]);
+
+/**
+ * Libellés qui introduisent la liste des participants / invités. Les contacts
+ * rattachés seront des contacts secondaires (sans rôle).
+ */
+const ATTENDEE_LABELS = new Set([
+  'attendees', 'attendee', 'participants', 'participant',
+  'required attendees', 'optional attendees', 'required', 'optional',
+  'invitees', 'invitee', 'invites', 'invite', 'invited', 'guests', 'guest',
+  'participants requis', 'participants facultatifs', 'participant requis',
+  'participant facultatif', 'membres', 'members', 'people', 'personnes',
+  'tracking', 'suivi', 'reponses', 'responses',
+]);
+
+/**
+ * Jetons de statut RSVP (Teams/Outlook) qu'il faut retirer d'une ligne
+ * participant pour n'en garder que le nom.
+ */
+const RSVP_TOKENS = new Set([
+  'accepted', 'accepte', 'acceptee', 'declined', 'refuse', 'refusee',
+  'tentative', 'provisoire', 'no response', 'sans reponse', 'pas de reponse',
+  'unknown', 'inconnu', 'optional', 'facultatif', 'required', 'requis',
+  'organizer', 'organisateur', 'awaiting', 'en attente', 'yes', 'no', 'maybe',
+  'oui', 'non', 'peut etre',
+]);
+
 /* ========================================================================== */
 /*  Service                                                                    */
 /* ========================================================================== */
@@ -161,19 +200,31 @@ export class OcrLayoutService {
     const titleZone = this.detectTitle(lines, used);
     if (titleZone) zones.push(titleZone);
 
-    // 2. Cartes contacts : groupes de lignes avec un rôle reconnu
+    // 2. Cartes contacts « métier » : groupes de lignes avec un rôle reconnu.
+    //    Traitées en premier pour que les cartes à rôle explicite conservent leur
+    //    rôle, même si l'image contient aussi des e-mails.
     const contactZones = this.detectContacts(lines, used);
     zones.push(...contactZones);
 
-    // 3. Champs clé:valeur (par mot-clé reconnu en début de ligne)
+    // 3. Contacts « réunion » (Teams/Outlook) : organisateur + participants,
+    //    détectés via les libellés de section (Organisateur, Participants…) ou
+    //    la présence d'adresses e-mail. Sans rôle métier.
+    const meetingZones = this.detectMeetingContacts(lines, used);
+    zones.push(...meetingZones);
+
+    // 4. Champs clé:valeur (par mot-clé reconnu en début de ligne)
     const fieldZones = this.detectFields(lines, used);
     zones.push(...fieldZones);
 
-    // 4. Description : les lignes restantes situées sous un libellé "description"
+    // 5. Description : les lignes restantes situées sous un libellé "description"
     //    sont fusionnées en une zone description, ou laissées en unknown sinon.
     this.extendDescriptionZone(zones, lines, used);
 
-    // 5. Le reste devient des zones unknown (utile pour annotation manuelle)
+    // 6. Description « majoritaire » : à défaut de libellé explicite, le plus
+    //    gros bloc de texte restant devient la description de la tâche.
+    this.detectBodyDescription(zones, lines, used);
+
+    // 7. Le reste devient des zones unknown (utile pour annotation manuelle)
     for (let i = 0; i < lines.length; i++) {
       if (!used.has(i)) {
         zones.push({
@@ -221,7 +272,239 @@ export class OcrLayoutService {
     };
   }
 
-  /* ----- Contacts ----- */
+  /* ----- Contacts « réunion » (Teams / Outlook) ----- */
+
+  private static readonly EMAIL_RE =
+    /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/;
+
+  /**
+   * Détecte l'organisateur et les participants d'une invitation / d'un détail de
+   * réunion (Teams, Outlook…).
+   *
+   * Deux signaux sont combinés :
+   *  - les **libellés de section** (« Organisateur », « Participants », « Required
+   *    attendees »…) qui qualifient les personnes qui suivent ;
+   *  - le motif **caption** où un libellé (« Organisateur ») figure juste sous le
+   *    nom de la personne ;
+   *  - la présence d'**adresses e-mail**, chaque personne portant en général son
+   *    adresse sur la même ligne ou la ligne adjacente.
+   *
+   * Les contacts ainsi détectés n'ont **pas de rôle métier** : l'organisateur est
+   * marqué `sender` (futur intervenant), les autres `recipient`.
+   */
+  private detectMeetingContacts(lines: OcrLine[], used: Set<number>): DetectedZone[] {
+    // On ne déclenche cette heuristique que si l'image ressemble à une réunion,
+    // pour ne pas capter des noms épars dans une capture CMDB (gérée par ailleurs).
+    if (!this.looksLikeMeeting(lines)) return [];
+
+    const zones: DetectedZone[] = [];
+    let sectionSource: 'sender' | 'recipient' | null = null;
+    let sectionLineIdx = -1;
+    let sawOrganizer = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) continue;
+      const line = lines[i]!;
+      const norm = this.normalize(line.text);
+      if (!norm) continue;
+
+      // 1. Ligne = libellé de section ?
+      const headerKind = this.sectionHeaderKind(norm);
+      if (headerKind) {
+        // Le libellé peut porter la personne en ligne : « Organisateur : Jean Dupont ».
+        const inline = line.text.match(/[:\-–—]\s*(.+)$/);
+        const inlineText = inline?.[1]?.trim() ?? '';
+        if (inlineText && this.parsePerson(inlineText).nom) {
+          const src = headerKind === 'sender' && !sawOrganizer ? 'sender' : 'recipient';
+          if (src === 'sender') sawOrganizer = true;
+          zones.push(this.makeContactZone(inlineText, [line], src, zones.length));
+          used.add(i);
+        } else {
+          sectionSource = headerKind;
+          sectionLineIdx = i;
+          used.add(i);
+        }
+        continue;
+      }
+
+      // 2. Ligne = personne ?
+      const person = this.parsePerson(line.text);
+      if (!person.nom && !person.email) {
+        // Ligne « neutre » (statut RSVP isolé, séparateur…) : ne casse pas la
+        // section tant qu'elle reste courte ; sinon on ferme la section.
+        if (norm.split(/\s+/).length > 6) { sectionSource = null; }
+        continue;
+      }
+
+      // Si la ligne suivante est un rôle métier (Sponsor, Architect…), il s'agit
+      // d'une carte contact à rôle : on la laisse à la détection « métier ».
+      const belowIdx = this.captionLineIdx(lines, i, used);
+      if (belowIdx >= 0 && this.looksLikeRole(this.normalize(lines[belowIdx]!.text))) continue;
+
+      // Contexte « réunion » de cette personne : est-elle sous une section, dotée
+      // d'un e-mail, ou légendée par un libellé (organisateur/participant) ?
+      const captionKind = this.captionBelowKind(lines, i, used);
+      const emailIdx = person.email ? -1 : this.findEmailNear(lines, [i], used);
+      const hasEmail = !!person.email || emailIdx >= 0;
+      const withinSection = sectionSource != null && (sectionLineIdx < 0
+        || line.bbox.y0 - lines[sectionLineIdx]!.bbox.y1 < line.fontHeight * 12);
+
+      // Sans contexte (nom isolé, ni section, ni e-mail, ni légende), on laisse la
+      // détection « métier » basée sur les rôles s'en charger : on ne capte pas.
+      if (!captionKind && !withinSection && !hasEmail) continue;
+
+      // Source : caption prioritaire, puis section, puis « premier = organisateur ».
+      let src: 'sender' | 'recipient';
+      if (captionKind) {
+        src = captionKind === 'sender' && !sawOrganizer ? 'sender' : 'recipient';
+      } else if (withinSection) {
+        src = sectionSource === 'sender' && !sawOrganizer ? 'sender' : 'recipient';
+      } else if (!sawOrganizer) {
+        // Personne dotée d'un e-mail hors de toute section : la première est
+        // présumée organisatrice (les détails Teams l'affichent en tête).
+        src = 'sender';
+      } else {
+        src = 'recipient';
+      }
+      if (src === 'sender') sawOrganizer = true;
+
+      // Regroupe les lignes sources (nom + éventuelle ligne e-mail adjacente).
+      const srcLines = [line];
+      if (emailIdx >= 0) { srcLines.push(lines[emailIdx]!); used.add(emailIdx); }
+
+      // Consomme aussi le libellé caption qui suit, le cas échéant.
+      if (captionKind) {
+        const capIdx = this.captionLineIdx(lines, i, used);
+        if (capIdx >= 0) { srcLines.push(lines[capIdx]!); used.add(capIdx); }
+      }
+
+      const email = person.email
+        ?? (emailIdx >= 0 ? lines[emailIdx]!.text.match(OcrLayoutService.EMAIL_RE)?.[0] : undefined);
+      zones.push(this.makeContactZone(person.nom || (email ?? line.text), srcLines, src, zones.length, email));
+      used.add(i);
+    }
+
+    return zones;
+  }
+
+  /** Construit une zone contact « réunion » (sans rôle métier). */
+  private makeContactZone(
+    name: string, srcLines: OcrLine[], source: 'sender' | 'recipient',
+    seq: number, email?: string,
+  ): DetectedZone {
+    const parsed = this.parsePerson(name);
+    const bbox = this.unionBBox(srcLines.map(s => s.bbox));
+    const conf = srcLines.reduce((a, s) => a + s.confidence, 0) / srcLines.length;
+    return {
+      id: 'z_meet_' + seq,
+      kind: 'contact',
+      bbox,
+      confidence: conf,
+      value: parsed.nom || name.trim(),
+      // Pas de rôle métier : on n'affecte pas `label`.
+      contactSource: source,
+      contactEmail: email ?? parsed.email,
+      sourceLines: srcLines,
+    };
+  }
+
+  /** L'image ressemble-t-elle à une invitation / réunion ? */
+  private looksLikeMeeting(lines: OcrLine[]): boolean {
+    let emails = 0;
+    for (const l of lines) {
+      const norm = this.normalize(l.text);
+      if (this.sectionHeaderKind(norm)) return true;
+      if (OcrLayoutService.EMAIL_RE.test(l.text)) emails++;
+    }
+    return emails >= 2;
+  }
+
+  /** Renvoie le type de section si la ligne est un libellé « organisateur/participants ». */
+  private sectionHeaderKind(norm: string): 'sender' | 'recipient' | null {
+    const clean = norm.replace(/[:\-–—]+$/, '').trim();
+    if (ORGANIZER_LABELS.has(clean)) return 'sender';
+    if (ATTENDEE_LABELS.has(clean)) return 'recipient';
+    // Tolère un compteur : « Participants (5) », « 3 required ».
+    const stripped = clean.replace(/\(?\d+\)?/g, '').replace(/\s+/g, ' ').trim();
+    if (stripped && stripped !== clean) {
+      if (ORGANIZER_LABELS.has(stripped)) return 'sender';
+      if (ATTENDEE_LABELS.has(stripped)) return 'recipient';
+    }
+    return null;
+  }
+
+  /** Si la ligne juste sous `idx` est un libellé organisateur/participant, renvoie son type. */
+  private captionBelowKind(lines: OcrLine[], idx: number, used: Set<number>): 'sender' | 'recipient' | null {
+    const capIdx = this.captionLineIdx(lines, idx, used);
+    if (capIdx < 0) return null;
+    return this.sectionHeaderKind(this.normalize(lines[capIdx]!.text));
+  }
+  private captionLineIdx(lines: OcrLine[], idx: number, used: Set<number>): number {
+    const cur = lines[idx]!;
+    for (let j = idx + 1; j <= Math.min(lines.length - 1, idx + 2); j++) {
+      if (used.has(j)) continue;
+      const l = lines[j]!;
+      if (l.bbox.y0 - cur.bbox.y1 > cur.fontHeight * 1.8) break;
+      if (!this.overlapX(l.bbox, cur.bbox, 0.2)) continue;
+      return j;
+    }
+    return -1;
+  }
+
+  /**
+   * Analyse un fragment de texte en un contact { nom, email, role? }.
+   * Retire les jetons de statut RSVP, les puces et la ponctuation parasite.
+   * Public : réutilisé par le dialogue lors d'un glisser-déposer manuel.
+   */
+  parsePerson(text: string): { nom: string; email?: string; role?: string } {
+    const email = text.match(OcrLayoutService.EMAIL_RE)?.[0];
+    // Retire l'e-mail, les parenthèses de statut, les puces et séparateurs.
+    let rest = text
+      .replace(OcrLayoutService.EMAIL_RE, ' ')
+      .replace(/[<>()\[\]{}|•·▪◦*]/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    // Retire les jetons RSVP en fin/début de ligne.
+    const words = rest.split(/\s+/).filter(Boolean);
+    const kept: string[] = [];
+    for (const w of words) {
+      const nw = this.normalize(w);
+      if (RSVP_TOKENS.has(nw)) continue;
+      kept.push(w);
+    }
+    // Recompose en retirant aussi les groupes de statut à deux mots (« no response »).
+    let name = kept.join(' ').replace(/\s{2,}/g, ' ').trim();
+    const normName = this.normalize(name);
+    if (RSVP_TOKENS.has(normName)) name = '';
+
+    // Un « nom » plausible : 1 à 5 mots, au moins une lettre, pas un libellé connu.
+    const nameWords = name.split(/\s+/).filter(Boolean);
+    const looksName =
+      name.length >= 2 &&
+      nameWords.length >= 1 && nameWords.length <= 5 &&
+      /[A-Za-zÀ-ÿ]/.test(name) &&
+      !FIELD_LABELS[normName] &&
+      !this.sectionHeaderKind(normName);
+
+    let nom = looksName ? name : '';
+    // À défaut de nom mais avec un e-mail, on le dérive de la partie locale.
+    if (!nom && email) nom = this.nameFromEmail(email);
+    return { nom, email };
+  }
+
+  /** « prenom.nom@ex.com » → « Prenom Nom ». */
+  private nameFromEmail(email: string): string {
+    const local = email.split('@')[0] ?? '';
+    return local
+      .split(/[._\-]+/)
+      .filter(Boolean)
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1))
+      .join(' ')
+      .trim();
+  }
+
+  /* ----- Contacts « métier » (rôle explicite) ----- */
 
   /**
    * Détecte les "cartes contacts" : recherche les lignes contenant un rôle connu
@@ -500,6 +783,73 @@ export class OcrLayoutService {
     descZone.bbox = this.unionBBox(merged.map(m => m.bbox));
   }
 
+  /**
+   * À défaut de libellé « Description » explicite, la plus grande zone de texte
+   * restante (corps du message, ordre du jour d'une réunion…) devient la
+   * description de la tâche. C'est cette « grande zone de texte » que
+   * l'utilisateur attend majoritairement dans le champ description.
+   */
+  private detectBodyDescription(zones: DetectedZone[], lines: OcrLine[], used: Set<number>): void {
+    // Si une description a déjà été trouvée via un libellé, on ne la remplace pas.
+    if (zones.some(z => z.kind === 'description' || (z.kind === 'field' && z.fieldKey === 'description'))) {
+      return;
+    }
+
+    // Regroupe les lignes restantes en blocs contigus (proximité verticale +
+    // alignement à gauche cohérent).
+    const clusters: OcrLine[][] = [];
+    let current: OcrLine[] = [];
+    let prev: OcrLine | null = null;
+
+    for (let i = 0; i < lines.length; i++) {
+      if (used.has(i)) { this.pushCluster(clusters, current); current = []; prev = null; continue; }
+      const l = lines[i]!;
+      const norm = this.normalize(l.text);
+      // On ignore (ferme le bloc) les libellés, rôles et lignes très courtes isolées.
+      if (FIELD_LABELS[norm] || this.looksLikeRole(norm) || this.sectionHeaderKind(norm)) {
+        this.pushCluster(clusters, current); current = []; prev = null; continue;
+      }
+      if (prev) {
+        const dy = l.bbox.y0 - prev.bbox.y1;
+        const dx = Math.abs(l.bbox.x0 - prev.bbox.x0);
+        if (dy > l.fontHeight * 2.5 || dx > l.fontHeight * 6) {
+          this.pushCluster(clusters, current); current = [];
+        }
+      }
+      current.push(l);
+      prev = l;
+    }
+    this.pushCluster(clusters, current);
+
+    if (clusters.length === 0) return;
+
+    // Score = quantité de texte « prose » (nombre de caractères), en privilégiant
+    // les blocs multi-lignes.
+    const score = (c: OcrLine[]) =>
+      c.reduce((a, l) => a + l.text.length, 0) + (c.length >= 2 ? 40 : 0);
+    let best = clusters[0]!;
+    for (const c of clusters) if (score(c) > score(best)) best = c;
+
+    const totalChars = best.reduce((a, l) => a + l.text.length, 0);
+    if (best.length < 2 && totalChars < 40) return; // trop maigre pour une description
+
+    const value = best.map(l => l.text).join('\n').trim();
+    zones.push({
+      id: 'z_desc_body',
+      kind: 'description',
+      bbox: this.unionBBox(best.map(l => l.bbox)),
+      fieldKey: 'description',
+      value,
+      confidence: best.reduce((a, l) => a + l.confidence, 0) / best.length,
+      sourceLines: best,
+    });
+    for (const l of best) used.add(lines.indexOf(l));
+  }
+
+  private pushCluster(clusters: OcrLine[][], current: OcrLine[]): void {
+    if (current.length > 0) clusters.push([...current]);
+  }
+
   /* ====================================================================== */
   /*  Conversion zones → données structurées                                 */
   /* ====================================================================== */
@@ -515,6 +865,9 @@ export class OcrLayoutService {
     for (const z of zones) {
       if (z.kind === 'title') {
         out.libelle = (z.value ?? '').replace(/\s+/g, ' ').trim();
+      } else if (z.kind === 'description') {
+        // Bloc de texte « majoritaire » détecté sans libellé explicite.
+        if (!out.description) out.description = (z.value ?? '').trim();
       } else if (z.kind === 'field') {
         switch (z.fieldKey) {
           case 'title':
@@ -536,19 +889,23 @@ export class OcrLayoutService {
       } else if (z.kind === 'contact') {
         const role = (z.label ?? '').trim();
         const nom = (z.value ?? '').trim();
-        // Email éventuel dans les sourceLines
-        const emailLine = z.sourceLines.find(l =>
-          /\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/.test(l.text)
-        );
-        const email = emailLine?.text.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b/)?.[0];
+        // Email : porté par la zone (contacts réunion) ou trouvé dans les sourceLines.
+        const emailLine = z.sourceLines.find(l => OcrLayoutService.EMAIL_RE.test(l.text));
+        const email = z.contactEmail
+          ?? emailLine?.text.match(OcrLayoutService.EMAIL_RE)?.[0];
         out.contacts.push({
           nom,
           role: role || undefined,
           email: email || undefined,
-          source: 'mentioned',
+          source: z.contactSource ?? 'mentioned',
         });
       }
     }
+
+    // L'organisateur (sender) est présenté en premier ; les participants suivent
+    // dans l'ordre de détection.
+    out.contacts.sort((a, b) =>
+      (a.source === 'sender' ? 0 : 1) - (b.source === 'sender' ? 0 : 1));
 
     return out;
   }

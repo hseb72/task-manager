@@ -35,9 +35,9 @@
 .overlay-zone:active {
   cursor: grabbing;
 }
-.overlay-zone:dragging {
+.overlay-zone.dragging {
   opacity: 0.5;
-  outline: 2px deshed white;
+  outline: 2px dashed white;
 }
 .overlay-zone:hover {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 0 0 4px rgba(0, 0, 0, 0.2);

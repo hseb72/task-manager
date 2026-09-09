@@ -111,8 +111,13 @@
             <label>Libellé</label>
             <input [value]="libelle()" (input)="libelle.set(v($event))">
 
-            <label class="mt-2">Description</label>
-            <textarea rows="4" [value]="description()" (input)="description.set(v($event))"></textarea>
+            <label class="mt-2">Description
+              <span class="muted" style="font-weight: normal; text-transform: none; letter-spacing: 0">
+                (le corps du texte détecté)
+              </span>
+            </label>
+            <textarea class="desc-textarea" rows="8"
+                      [value]="description()" (input)="description.set(v($event))"></textarea>
 
             <div class="grid-2 mt-2">
               <div>
@@ -159,10 +164,19 @@
         </div>
 
         <!-- Contacts détectés -->
-        <div class="card mt-2">
+        <div class="card mt-2 contacts-drop"
+             [class.drop-active]="contactsDropActive()"
+             (dragover)="onContactsDragOver($event)"
+             (dragleave)="onContactsDragLeave()"
+             (drop)="onContactsDrop($event)">
           <h3>Contacts détectés ({{ contactDecisions().length }})</h3>
+          <div class="drop-hint">
+            ⇱ Glissez ici une zone de l'image (ou un texte surligné) pour ajouter un contact manquant.
+          </div>
           @if (contactDecisions().length === 0) {
-            <div class="empty-state" style="font-size: 0.85rem">Aucun contact identifié dans l'image.</div>
+            <div class="empty-state" style="font-size: 0.85rem">
+              Aucun contact identifié dans l'image. Glissez un nom ou un e-mail de l'image dans cette zone pour en ajouter un.
+            </div>
           } @else {
             <table class="data-table">
               <thead>
@@ -172,6 +186,7 @@
                   <th>Source</th>
                   <th style="min-width: 280px">Action</th>
                   <th style="min-width: 180px">Rôle (sur cette tâche)</th>
+                  <th style="width: 30px"></th>
                 </tr>
               </thead>
               <tbody>
@@ -250,15 +265,21 @@
                         }
                       }
                     </td>
+                    <td>
+                      <button class="icon-btn" title="Retirer ce contact"
+                              (click)="removeDecision(i)">✕</button>
+                    </td>
                   </tr>
                 }
               </tbody>
             </table>
             <div class="muted mt-1" style="font-size: 0.78rem">
-              Le contact coché à gauche sera désigné comme <strong>intervenant</strong> de la tâche ;
-              tous les contacts conservés (intervenant inclus) seront liés à la tâche avec leur rôle respectif.
-              Saisir un rôle absent du référentiel le créera automatiquement.
-              <strong>Astuce :</strong> survolez une ligne pour mettre en évidence sa zone dans l'image, et inversement.
+              Pour une réunion Teams, l'<strong>organisateur</strong> est proposé comme
+              <strong>intervenant</strong> et les autres <strong>participants</strong> comme contacts
+              secondaires (sans rôle). Les contacts inexistants seront créés automatiquement.
+              Le contact coché à gauche sera désigné comme intervenant ; saisir un rôle absent du
+              référentiel le créera. <strong>Astuce :</strong> survolez une ligne pour mettre en évidence
+              sa zone dans l'image, et glissez une zone de l'image vers cette carte pour ajouter un contact.
             </div>
           }
         </div>
