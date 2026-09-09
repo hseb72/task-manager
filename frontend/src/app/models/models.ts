@@ -1,4 +1,4 @@
-export type RefKind = 'simple' | 'service' | 'contact';
+export type RefKind = 'simple' | 'service' | 'contact' | 'source';
 
 export interface ReferenceTableMeta {
   name: string;
@@ -35,7 +35,25 @@ export interface ContactRef {
   entite_libelle?: string | null;
 }
 
-export type RefRow = SimpleRef | ServiceRef | ContactRef;
+/** Référentiel "source web" : libellé + gabarit d'URL d'enrichissement */
+export interface SourceRef {
+  id: number;
+  libelle: string;
+  url: string;
+  actif: number;
+}
+
+export type RefRow = SimpleRef | ServiceRef | ContactRef | SourceRef;
+
+/** Résultat d'un enrichissement de contact depuis une source web. */
+export interface EnrichResult {
+  url: string;
+  source: { id: number; libelle: string };
+  deduced: { service: string | null; entite: string | null };
+  serviceMatch: { id: number; libelle: string; entite_id: number | null; entite_libelle?: string | null } | null;
+  entiteMatch: { id: number; libelle: string } | null;
+  pairsFound: number;
+}
 
 export interface Action {
   id: number;

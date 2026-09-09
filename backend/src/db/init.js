@@ -22,12 +22,13 @@ if (!fs.existsSync(dataDir)) {
  * tache_contacts (un même contact peut tenir des rôles différents selon la tâche).
  */
 export const REFERENCE_TABLES = [
-  { name: 'entites',   label: 'Entités',                kind: 'simple'  },
-  { name: 'services',  label: 'Services',               kind: 'service' },
-  { name: 'contacts',  label: 'Contacts',               kind: 'contact' },
-  { name: 'roles',     label: 'Rôles',                  kind: 'simple'  },
-  { name: 'etats',     label: 'États',                  kind: 'simple'  },
-  { name: 'domaines',  label: 'Domaines d\'activité',   kind: 'simple'  },
+  { name: 'entites',      label: 'Entités',                kind: 'simple'  },
+  { name: 'services',     label: 'Services',               kind: 'service' },
+  { name: 'contacts',     label: 'Contacts',               kind: 'contact' },
+  { name: 'roles',        label: 'Rôles',                  kind: 'simple'  },
+  { name: 'etats',        label: 'États',                  kind: 'simple'  },
+  { name: 'domaines',     label: 'Domaines d\'activité',   kind: 'simple'  },
+  { name: 'sources_web',  label: 'Sources web (enrichissement)', kind: 'source' },
 ];
 
 export const SIMPLE_TABLES  = REFERENCE_TABLES.filter(t => t.kind === 'simple').map(t => t.name);
@@ -152,6 +153,20 @@ export async function initDatabase() {
       actif     INTEGER NOT NULL DEFAULT 1,
       entite_id INTEGER REFERENCES entites(id) ON DELETE SET NULL,
       UNIQUE (libelle, entite_id)
+    )
+  `);
+
+  // ----- Sources web d'enrichissement -----
+  //  url : gabarit d'URL de l'annuaire interne ; le marqueur {nom} (ou {name})
+  //  y est remplacé par le nom du contact (URL-encodé). Sans marqueur, le nom
+  //  est ajouté en fin d'URL.
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS sources_web (
+      id      INTEGER PRIMARY KEY AUTOINCREMENT,
+      libelle TEXT NOT NULL,
+      url     TEXT NOT NULL,
+      actif   INTEGER NOT NULL DEFAULT 1,
+      UNIQUE (libelle)
     )
   `);
 
@@ -289,6 +304,16 @@ export async function seedIfEmpty() {
       });
     }
     console.log('✓ Référentiel "contacts" rempli');
+  }
+
+  // Source web d'enrichissement (exemple / gabarit à adapter)
+  const { rows: cSrc } = await db.execute('SELECT COUNT(*) as c FROM sources_web');
+  if (Number(cSrc[0].c) === 0) {
+    await db.execute({
+      sql: 'INSERT INTO sources_web (libelle, url, actif) VALUES (?, ?, ?)',
+      args: ['Annuaire interne (exemple)', 'https://intranet.example.com/annuaire?q={nom}', 0],
+    });
+    console.log('✓ Référentiel "sources_web" rempli (exemple)');
   }
 
   // Tâche d'exemple

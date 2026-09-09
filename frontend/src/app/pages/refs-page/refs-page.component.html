@@ -78,10 +78,48 @@
             <button class="btn primary" (click)="add()">Ajouter</button>
           </div>
         }
+        @case ('source') {
+          <div class="row gap-sm mb-2">
+            <input placeholder="Libellé de la source…"
+                   [value]="newSourceLibelle()"
+                   (input)="setAddField('sourceLibelle', $event)"
+                   style="max-width: 220px">
+            <input placeholder="https://intranet/annuaire?q={nom}"
+                   [value]="newSourceUrl()"
+                   (input)="setAddField('sourceUrl', $event)"
+                   (keydown.enter)="add()"
+                   style="flex: 1; min-width: 260px">
+            <button class="btn primary" (click)="add()">Ajouter</button>
+          </div>
+          <div class="muted mb-2" style="font-size: 0.78rem">
+            Le marqueur <code>&#123;nom&#125;</code> est remplacé par le nom du contact (encodé) lors de l'enrichissement.
+            Sans marqueur, le nom est ajouté en paramètre <code>?q=</code>.
+          </div>
+        }
       }
 
       @if (errorMsg()) {
         <div class="empty-state" style="color: var(--danger); padding: 0.5rem">{{ errorMsg() }}</div>
+      }
+
+      @if (kind() === 'contact') {
+        @if (activeSources().length > 0) {
+          <div class="row gap-sm mb-2" style="font-size: 0.82rem; align-items: center">
+            <span class="muted">Source d'enrichissement :</span>
+            <select [ngModel]="enrichSourceId()" (ngModelChange)="enrichSourceId.set($event)"
+                    style="border: 1px solid var(--line); max-width: 240px">
+              @for (s of activeSources(); track s.id) {
+                <option [ngValue]="s.id">{{ s.libelle }}</option>
+              }
+            </select>
+            <span class="muted">— bouton 🔎 par ligne pour déduire service &amp; entité.</span>
+          </div>
+        } @else {
+          <div class="muted mb-2" style="font-size: 0.8rem">
+            Astuce : ajoutez une <a [routerLink]="['/referentiels', 'sources_web']">source web</a>
+            active pour enrichir les contacts (service &amp; entité) depuis votre annuaire interne.
+          </div>
+        }
       }
 
       @if (values().length === 0) {
@@ -173,6 +211,7 @@
                   <th>Email</th>
                   <th>Téléphone</th>
                   <th style="width: 100px">État</th>
+                  <th style="width: 90px"></th>
                   <th style="width: 60px"></th>
                 </tr>
               </thead>
@@ -211,6 +250,48 @@
                         @else {<span class="badge">Inactif</span>}
                       </button>
                     </td>
+                    <td>
+                      <button class="btn tight" (click)="openEnrich(v)"
+                              [disabled]="activeSources().length === 0"
+                              title="Enrichir depuis une source web (service &amp; entité)">
+                        🔎 Enrichir
+                      </button>
+                    </td>
+                    <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+          @case ('source') {
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px">ID</th>
+                  <th style="min-width: 180px">Libellé</th>
+                  <th>URL (gabarit)</th>
+                  <th style="width: 120px">État</th>
+                  <th style="width: 60px"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of asSources(); track trackById($index, v)) {
+                  <tr>
+                    <td class="id-col">#{{ v.id }}</td>
+                    <td>
+                      <input class="cell-input" [value]="v.libelle"
+                             (change)="renameSource(v, $event)">
+                    </td>
+                    <td>
+                      <input class="cell-input mono" [value]="v.url"
+                             (change)="changeSourceUrl(v, $event)">
+                    </td>
+                    <td>
+                      <button class="btn tight" (click)="toggleActif(v)">
+                        @if (v.actif) {<span class="badge ok">Actif</span>}
+                        @else {<span class="badge">Inactif</span>}
+                      </button>
+                    </td>
                     <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
                   </tr>
                 }
@@ -222,3 +303,82 @@
     </div>
   </section>
 </div>
+
+<!-- ====================================================================== -->
+<!-- Panneau d'enrichissement d'un contact                                    -->
+<!-- ====================================================================== -->
+@if (enrich(); as st) {
+  <div class="modal-backdrop" (click)="closeEnrich()">
+    <div class="modal" (click)="$event.stopPropagation()" style="max-width: 560px">
+      <div class="modal-head">
+        <div>
+          <h2>Enrichir « {{ st.contact.nom }} »</h2>
+          <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
+            Recherche du service et de l'entité (métier) de rattachement.
+          </div>
+        </div>
+        <button class="icon-btn" (click)="closeEnrich()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        @if (st.loading) {
+          <div class="empty-state">Consultation de la source web…</div>
+        } @else if (st.error) {
+          <div class="empty-state" style="color: var(--danger)">{{ st.error }}</div>
+        } @else if (st.result; as r) {
+          <div class="mb-2" style="font-size: 0.82rem">
+            Source : <strong>{{ r.source.libelle }}</strong> —
+            <a [href]="r.url" target="_blank" rel="noopener">ouvrir la page ↗</a>
+          </div>
+
+          <table class="data-table">
+            <tbody>
+              <tr>
+                <td style="width: 130px" class="muted">Service détecté</td>
+                <td>
+                  <strong>{{ r.deduced.service ?? '—' }}</strong>
+                  @if (r.serviceMatch) {
+                    <span class="badge ok" style="margin-left: 0.4rem">↦ {{ r.serviceMatch.libelle }}</span>
+                  } @else if (r.deduced.service) {
+                    <span class="badge" style="margin-left: 0.4rem">aucun service correspondant</span>
+                  }
+                </td>
+              </tr>
+              <tr>
+                <td class="muted">Entité (métier)</td>
+                <td>
+                  <strong>{{ r.deduced.entite ?? '—' }}</strong>
+                  @if (r.serviceMatch?.entite_libelle) {
+                    <span class="badge ok" style="margin-left: 0.4rem">↦ {{ r.serviceMatch!.entite_libelle }}</span>
+                  } @else if (r.entiteMatch) {
+                    <span class="badge" style="margin-left: 0.4rem">↦ {{ r.entiteMatch.libelle }} (aucun service rattaché)</span>
+                  }
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          @if (!r.deduced.service && !r.deduced.entite) {
+            <div class="muted mt-2" style="font-size: 0.8rem">
+              Aucune information de service/entité trouvée sur la page ({{ r.pairsFound }} champ(s) analysé(s)).
+              Vérifiez le gabarit d'URL de la source.
+            </div>
+          }
+          @if (r.serviceMatch) {
+            <div class="muted mt-2" style="font-size: 0.8rem">
+              « Appliquer » rattachera le contact au service <strong>{{ r.serviceMatch.libelle }}</strong>
+              (l'entité en découle).
+            </div>
+          }
+        }
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn" (click)="closeEnrich()">Fermer</button>
+        @if (st.result?.serviceMatch) {
+          <button class="btn primary" (click)="applyEnrich()">Appliquer le rattachement</button>
+        }
+      </div>
+    </div>
+  </div>
+}

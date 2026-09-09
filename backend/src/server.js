@@ -4,6 +4,7 @@ import { initDatabase, seedIfEmpty } from './db/init.js';
 import tachesRouter   from './routes/taches.js';
 import refsRouter     from './routes/refs.js';
 import transferRouter from './routes/transfer.js';
+import enrichRouter   from './routes/enrich.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +35,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/taches', tachesRouter);
 app.use('/api/refs',   refsRouter);
+app.use('/api/enrich', enrichRouter);
 app.use('/api',        transferRouter);
 
 // 404 JSON
@@ -58,6 +60,7 @@ app.use((err, _req, res, _next) => {
       console.log(`    GET  /api/health`);
       console.log(`    *    /api/taches[/:id[/actions|/contacts]]`);
       console.log(`    *    /api/refs/:table[/:id]`);
+      console.log(`    POST /api/enrich  { nom, sourceId? }`);
       console.log(`    GET  /api/export`);
       console.log(`    POST /api/import?mode=replace|merge\n`);
     });

@@ -285,12 +285,23 @@ export class OcrImportDialogComponent {
       for (const d of this.contactDecisions()) {
         if (d.mode === 'skip')     { contactIds.push(null); continue; }
         if (d.mode === 'existing') { contactIds.push(d.existingId); continue; }
-        const created = await firstValueFrom(this.refs.create('contacts', {
-          nom: d.draft.nom,
-          email: d.draft.email || null,
-          service_id: d.draft.service_id,
-        } as Partial<ContactRef>));
-        contactIds.push((created as ContactRef).id);
+        try {
+          const created = await firstValueFrom(this.refs.create('contacts', {
+            nom: d.draft.nom,
+            email: d.draft.email || null,
+            service_id: d.draft.service_id,
+          } as Partial<ContactRef>));
+          contactIds.push((created as ContactRef).id);
+        } catch (e: any) {
+          // Doublon de nom : le backend renvoie 409 + l'id existant → on le réutilise
+          // au lieu d'échouer, ce qui évite de créer un doublon.
+          const existingId = e?.error?.existingId;
+          if (e?.status === 409 && existingId) {
+            contactIds.push(Number(existingId));
+          } else {
+            throw e;
+          }
+        }
       }
 
       const roleIds: (number | null)[] = [];

@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, tap, forkJoin } from 'rxjs';
 import {
   ReferenceTableMeta, RefRow,
-  SimpleRef, ServiceRef, ContactRef,
+  SimpleRef, ServiceRef, ContactRef, SourceRef, EnrichResult,
 } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
@@ -18,6 +18,7 @@ export class RefsService {
   readonly roles    = signal<SimpleRef[]>([]);
   readonly etats    = signal<SimpleRef[]>([]);
   readonly domaines = signal<SimpleRef[]>([]);
+  readonly sourcesWeb = signal<SourceRef[]>([]);
 
   loadAll(): Observable<unknown> {
     return forkJoin({
@@ -28,6 +29,7 @@ export class RefsService {
       roles:    this.http.get<SimpleRef[]>(`${this.base}/roles`),
       etats:    this.http.get<SimpleRef[]>(`${this.base}/etats`),
       domaines: this.http.get<SimpleRef[]>(`${this.base}/domaines`),
+      sourcesWeb: this.http.get<SourceRef[]>(`${this.base}/sources_web`),
     }).pipe(tap(r => {
       this.tables.set(r.tables);
       this.entites.set(r.entites);
@@ -36,7 +38,13 @@ export class RefsService {
       this.roles.set(r.roles);
       this.etats.set(r.etats);
       this.domaines.set(r.domaines);
+      this.sourcesWeb.set(r.sourcesWeb);
     }));
+  }
+
+  /** Enrichit un contact (service + entité) depuis une source web interne. */
+  enrich(nom: string, sourceId?: number | null): Observable<EnrichResult> {
+    return this.http.post<EnrichResult>('/api/enrich', { nom, sourceId: sourceId ?? null });
   }
 
   list(table: string): Observable<RefRow[]> {
@@ -60,6 +68,7 @@ export class RefsService {
       case 'roles':    this.roles.set(values as SimpleRef[]);    break;
       case 'etats':    this.etats.set(values as SimpleRef[]);    break;
       case 'domaines': this.domaines.set(values as SimpleRef[]); break;
+      case 'sources_web': this.sourcesWeb.set(values as SourceRef[]); break;
     }
   }
 }

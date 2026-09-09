@@ -15,6 +15,7 @@ const TABLES_IN_ORDER = [
   'roles',
   'etats',
   'domaines',
+  'sources_web',
   'taches',
   'actions',
   'tache_contacts',

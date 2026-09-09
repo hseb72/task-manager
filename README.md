@@ -78,10 +78,14 @@ Les bases existantes sont migrées automatiquement au démarrage :
 
 #### Référentiels
 - `GET    /api/refs` — liste les référentiels disponibles
-- `GET    /api/refs/:table` — toutes les valeurs (`demandeurs`, `entites`, `services`, `etats`, `domaines`)
-- `POST   /api/refs/:table` — `{ libelle, actif? }`
+- `GET    /api/refs/:table` — toutes les valeurs (`entites`, `services`, `contacts`, `roles`, `etats`, `domaines`, `sources_web`)
+- `POST   /api/refs/:table` — `{ libelle, actif? }` (contacts : `{ nom, … }` ; sources_web : `{ libelle, url, actif? }`)
+  - **Contacts** : la création est refusée (409) si un contact du **même nom** existe déjà (à la casse et aux espaces près).
 - `PUT    /api/refs/:table/:id`
 - `DELETE /api/refs/:table/:id`
+
+#### Enrichissement de contact
+- `POST /api/enrich` — body `{ nom, sourceId? }`. Construit l'URL de la source web (le marqueur `{nom}` y est remplacé par le nom, URL-encodé ; sinon `?q=` est ajouté), récupère la page **côté serveur**, en extrait des paires « libellé : valeur » (tableaux, listes de définitions, lignes texte) et **déduit le service et l'entité (« métier ») de rattachement** en les rapprochant des référentiels. Réponse : `{ url, deduced, serviceMatch, entiteMatch }`. La route ne modifie rien ; le frontend applique le rattachement validé (`service_id`, l'entité en découlant).
 
 #### Divers
 - `GET /api/health` — sonde de vie
@@ -164,6 +168,8 @@ Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
 - Menu latéral pour basculer entre les référentiels.
 - Ajout, renommage, désactivation (actif/inactif) et suppression des valeurs.
 - Les valeurs renommées se propagent immédiatement aux listes déroulantes de la page principale.
+- **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Chaque ligne dispose d'un bouton **🔎 Enrichir** qui interroge une **source web interne** (annuaire) pour déduire automatiquement le **service** et l'**entité (métier)** de rattachement, puis propose de les appliquer.
+- **Sources web (enrichissement)** : nouveau référentiel administrable où l'on saisit le **gabarit d'URL** de l'annuaire interne (ex. `https://intranet/annuaire?q={nom}`). Le marqueur `{nom}` est remplacé par le nom du contact au moment de l'enrichissement. Seules les sources **actives** sont proposées.
 
 ---
 

@@ -113,8 +113,19 @@ router.post('/:table', ensureTable, async (req, res, next) => {
         args: [libelle, b.actif === 0 ? 0 : 1, b.entite_id ?? null],
       });
     } else if (kind === 'contact') {
-      const nom = (b.nom ?? '').trim();
+      const nom = (b.nom ?? '').replace(/\s+/g, ' ').trim();
       if (!nom) return res.status(400).json({ error: 'Nom requis' });
+      // Interdiction des doublons : un contact du même nom (à la casse et aux
+      // espaces près) ne peut pas être créé deux fois.
+      const key = nom.toLowerCase();
+      const { rows: existing } = await db.execute('SELECT id, nom FROM contacts');
+      const dup = existing.find(r => String(r.nom).replace(/\s+/g, ' ').trim().toLowerCase() === key);
+      if (dup) {
+        return res.status(409).json({
+          error: `Un contact nommé « ${nom} » existe déjà`,
+          existingId: Number(dup.id),
+        });
+      }
       result = await db.execute({
         sql: `INSERT INTO contacts (nom, email, telephone, actif, service_id)
               VALUES (?, ?, ?, ?, ?)`,
@@ -125,6 +136,15 @@ router.post('/:table', ensureTable, async (req, res, next) => {
           b.actif === 0 ? 0 : 1,
           b.service_id ?? null,
         ],
+      });
+    } else if (kind === 'source') {
+      const libelle = (b.libelle ?? '').trim();
+      const url = (b.url ?? '').trim();
+      if (!libelle) return res.status(400).json({ error: 'Libellé requis' });
+      if (!url)     return res.status(400).json({ error: 'URL requise' });
+      result = await db.execute({
+        sql: 'INSERT INTO sources_web (libelle, url, actif) VALUES (?, ?, ?)',
+        args: [libelle, url, b.actif === 0 ? 0 : 1],
       });
     }
 
@@ -158,6 +178,7 @@ router.put('/:table/:id', ensureTable, async (req, res, next) => {
       service: { libelle: 'libelle', actif: 'actif', entite_id: 'entite_id' },
       contact: { nom: 'nom', email: 'email', telephone: 'telephone',
                  actif: 'actif', service_id: 'service_id' },
+      source:  { libelle: 'libelle', url: 'url', actif: 'actif' },
     };
     const map = fieldMaps[kind];
 
