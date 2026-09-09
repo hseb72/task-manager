@@ -93,6 +93,23 @@ async function runMigrations() {
     }
   }
 
+  // 2b. Migration de sources_web : ajout du rendu JS et des colonnes d'auth.
+  if (await tableExists('sources_web')) {
+    const cols = [
+      ['rendu_js',    'rendu_js INTEGER NOT NULL DEFAULT 0'],
+      ['auth_type',   'auth_type TEXT'],
+      ['auth_user',   'auth_user TEXT'],
+      ['auth_secret', 'auth_secret TEXT'],
+      ['auth_header', 'auth_header TEXT'],
+    ];
+    for (const [col, ddl] of cols) {
+      if (!await columnExists('sources_web', col)) {
+        await db.execute(`ALTER TABLE sources_web ADD COLUMN ${ddl}`);
+        console.log(`↻ Migration : sources_web.${col} ajouté`);
+      }
+    }
+  }
+
   // 3. Migration de tache_contacts : ajout de role_id
   if (await tableExists('tache_contacts') && !await columnExists('tache_contacts', 'role_id')) {
     await db.execute(`ALTER TABLE tache_contacts ADD COLUMN role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL`);
@@ -160,12 +177,20 @@ export async function initDatabase() {
   //  url : gabarit d'URL de l'annuaire interne ; le marqueur {nom} (ou {name})
   //  y est remplacé par le nom du contact (URL-encodé). Sans marqueur, le nom
   //  est ajouté en fin d'URL.
+  //  rendu_js : 1 = la page est rendue par un navigateur headless (Playwright)
+  //             avant lecture (sites dont le contenu est injecté en JavaScript).
+  //  auth_*   : authentification optionnelle (basic / bearer / header / cookie).
   await db.execute(`
     CREATE TABLE IF NOT EXISTS sources_web (
-      id      INTEGER PRIMARY KEY AUTOINCREMENT,
-      libelle TEXT NOT NULL,
-      url     TEXT NOT NULL,
-      actif   INTEGER NOT NULL DEFAULT 1,
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      libelle     TEXT NOT NULL,
+      url         TEXT NOT NULL,
+      actif       INTEGER NOT NULL DEFAULT 1,
+      rendu_js    INTEGER NOT NULL DEFAULT 0,
+      auth_type   TEXT,
+      auth_user   TEXT,
+      auth_secret TEXT,
+      auth_header TEXT,
       UNIQUE (libelle)
     )
   `);

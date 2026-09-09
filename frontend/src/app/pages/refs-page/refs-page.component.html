@@ -268,9 +268,12 @@
               <thead>
                 <tr>
                   <th style="width: 60px">ID</th>
-                  <th style="min-width: 180px">Libellé</th>
+                  <th style="min-width: 160px">Libellé</th>
                   <th>URL (gabarit)</th>
-                  <th style="width: 120px">État</th>
+                  <th style="width: 80px">Rendu</th>
+                  <th style="width: 110px">Auth</th>
+                  <th style="width: 110px">État</th>
+                  <th style="width: 70px"></th>
                   <th style="width: 60px"></th>
                 </tr>
               </thead>
@@ -287,10 +290,28 @@
                              (change)="changeSourceUrl(v, $event)">
                     </td>
                     <td>
+                      <button class="btn tight" (click)="toggleRenduJs(v)"
+                              title="Basculer le rendu JavaScript (navigateur headless)">
+                        @if (v.rendu_js) {<span class="badge ok">JS</span>}
+                        @else {<span class="badge">HTML</span>}
+                      </button>
+                    </td>
+                    <td>
+                      @if (v.auth_type && v.auth_type !== 'none') {
+                        <span class="badge ok">{{ v.auth_type }}</span>
+                      } @else {
+                        <span class="badge">aucune</span>
+                      }
+                    </td>
+                    <td>
                       <button class="btn tight" (click)="toggleActif(v)">
                         @if (v.actif) {<span class="badge ok">Actif</span>}
                         @else {<span class="badge">Inactif</span>}
                       </button>
+                    </td>
+                    <td>
+                      <button class="btn tight" (click)="openSourceConfig(v)"
+                              title="Configurer le rendu et l'authentification">⚙</button>
                     </td>
                     <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
                   </tr>
@@ -378,6 +399,81 @@
         @if (st.result?.serviceMatch) {
           <button class="btn primary" (click)="applyEnrich()">Appliquer le rattachement</button>
         }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ====================================================================== -->
+<!-- Configuration d'une source web (rendu JS + authentification)             -->
+<!-- ====================================================================== -->
+@if (sourceEdit(); as e) {
+  <div class="modal-backdrop" (click)="closeSourceConfig()">
+    <div class="modal" (click)="$event.stopPropagation()" style="max-width: 520px">
+      <div class="modal-head">
+        <div>
+          <h2>Configurer « {{ e.libelle }} »</h2>
+          <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
+            Rendu de la page et authentification de l'annuaire interne.
+          </div>
+        </div>
+        <button class="icon-btn" (click)="closeSourceConfig()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <label class="row gap-sm" style="margin-bottom: 0.8rem">
+          <input type="checkbox" [checked]="e.rendu_js"
+                 (change)="updateSourceEdit({ rendu_js: !e.rendu_js })">
+          <span>Rendu JavaScript (navigateur headless — pour les pages dont le contenu est injecté en JS)</span>
+        </label>
+
+        <label>Authentification</label>
+        <select [ngModel]="e.auth_type" (ngModelChange)="updateSourceEdit({ auth_type: $event })">
+          <option value="none">Aucune</option>
+          <option value="basic">Basic (identifiant + mot de passe)</option>
+          <option value="bearer">Bearer (jeton)</option>
+          <option value="header">En-tête personnalisé</option>
+          <option value="cookie">Cookie</option>
+        </select>
+
+        @if (e.auth_type === 'basic') {
+          <div class="mt-2">
+            <label>Identifiant</label>
+            <input [value]="e.auth_user" (input)="updateSourceEdit({ auth_user: v($event) })"
+                   placeholder="compte de service">
+          </div>
+        }
+        @if (e.auth_type === 'header') {
+          <div class="mt-2">
+            <label>Nom de l'en-tête</label>
+            <input [value]="e.auth_header" (input)="updateSourceEdit({ auth_header: v($event) })"
+                   placeholder="Authorization">
+          </div>
+        }
+
+        @if (e.auth_type !== 'none') {
+          <div class="mt-2">
+            <label>
+              @switch (e.auth_type) {
+                @case ('basic')  { Mot de passe }
+                @case ('bearer') { Jeton }
+                @case ('header') { Valeur de l'en-tête }
+                @case ('cookie') { Chaîne de cookie (ex. « SID=abc; k=v ») }
+              }
+            </label>
+            <input type="password" autocomplete="new-password"
+                   [value]="e.secret" (input)="updateSourceEdit({ secret: v($event) })"
+                   [placeholder]="e.secretSet ? '•••••••• (défini — laisser vide pour conserver)' : 'saisir la valeur'">
+            <div class="muted mt-1" style="font-size: 0.76rem">
+              Le secret est stocké côté serveur et n'est jamais réaffiché.
+            </div>
+          </div>
+        }
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn" (click)="closeSourceConfig()">Annuler</button>
+        <button class="btn primary" (click)="saveSourceConfig()">Enregistrer</button>
       </div>
     </div>
   </div>

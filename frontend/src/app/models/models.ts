@@ -35,12 +35,24 @@ export interface ContactRef {
   entite_libelle?: string | null;
 }
 
+/** Type d'authentification d'une source web. */
+export type SourceAuthType = 'none' | 'basic' | 'bearer' | 'header' | 'cookie';
+
 /** Référentiel "source web" : libellé + gabarit d'URL d'enrichissement */
 export interface SourceRef {
   id: number;
   libelle: string;
   url: string;
   actif: number;
+  /** 1 = la page est rendue par un navigateur headless (contenu injecté en JS). */
+  rendu_js: number;
+  auth_type: SourceAuthType | null;
+  auth_user: string | null;
+  auth_header: string | null;
+  /** Indicateur (lecture seule) : un secret est-il défini ? Le secret n'est jamais renvoyé. */
+  auth_secret_set?: number;
+  /** Écriture seule : nouveau secret (mot de passe / jeton / cookie). */
+  auth_secret?: string | null;
 }
 
 export type RefRow = SimpleRef | ServiceRef | ContactRef | SourceRef;

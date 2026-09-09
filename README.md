@@ -86,6 +86,8 @@ Les bases existantes sont migrées automatiquement au démarrage :
 
 #### Enrichissement de contact
 - `POST /api/enrich` — body `{ nom, sourceId? }`. Construit l'URL de la source web (le marqueur `{nom}` y est remplacé par le nom, URL-encodé ; sinon `?q=` est ajouté), récupère la page **côté serveur**, en extrait des paires « libellé : valeur » (tableaux, listes de définitions, lignes texte) et **déduit le service et l'entité (« métier ») de rattachement** en les rapprochant des référentiels. Réponse : `{ url, deduced, serviceMatch, entiteMatch }`. La route ne modifie rien ; le frontend applique le rattachement validé (`service_id`, l'entité en découlant).
+  - **Rendu JavaScript** : si la source a `rendu_js = 1`, la page est chargée dans un **navigateur headless** ([Playwright](https://playwright.dev/)) qui exécute le JS avant lecture (pour les annuaires dont le contenu est injecté côté client). Sinon, un simple `fetch` est utilisé (plus rapide). Playwright est **chargé à la demande** : les sources sans rendu JS n'en dépendent pas.
+  - **Authentification** (portée par la source) : `auth_type` ∈ `none | basic | bearer | header | cookie`. `basic` utilise `auth_user` + secret ; `bearer`/`header`/`cookie` utilisent le secret comme jeton / valeur d'en-tête (`auth_header`, défaut `Authorization`) / chaîne de cookie. Le **secret n'est jamais renvoyé** par l'API (seul `auth_secret_set: 0|1` l'indique) ; il est stocké en clair côté serveur (base SQLite) — réservez ces sources à un usage interne.
 
 #### Divers
 - `GET /api/health` — sonde de vie
@@ -169,7 +171,9 @@ Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
 - Ajout, renommage, désactivation (actif/inactif) et suppression des valeurs.
 - Les valeurs renommées se propagent immédiatement aux listes déroulantes de la page principale.
 - **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Chaque ligne dispose d'un bouton **🔎 Enrichir** qui interroge une **source web interne** (annuaire) pour déduire automatiquement le **service** et l'**entité (métier)** de rattachement, puis propose de les appliquer.
-- **Sources web (enrichissement)** : nouveau référentiel administrable où l'on saisit le **gabarit d'URL** de l'annuaire interne (ex. `https://intranet/annuaire?q={nom}`). Le marqueur `{nom}` est remplacé par le nom du contact au moment de l'enrichissement. Seules les sources **actives** sont proposées.
+- **Sources web (enrichissement)** : nouveau référentiel administrable où l'on saisit le **gabarit d'URL** de l'annuaire interne (ex. `https://intranet/annuaire?q={nom}`). Le marqueur `{nom}` est remplacé par le nom du contact au moment de l'enrichissement. Seules les sources **actives** sont proposées. Chaque source dispose d'un bouton **⚙** ouvrant un panneau de configuration : bascule **Rendu JavaScript** (navigateur headless) et **authentification** (Basic / Bearer / En-tête / Cookie ; le secret saisi n'est jamais réaffiché).
+
+> **Rendu JavaScript** : pour activer le rendu headless côté serveur, installez Playwright dans `backend/` : `npm i playwright` puis `npx playwright install chromium`. Les sources en mode HTML simple n'en ont pas besoin.
 
 ---
 

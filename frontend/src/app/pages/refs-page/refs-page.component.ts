@@ -5,8 +5,20 @@ import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { RefsService } from '../../services/refs.service';
 import {
   RefRow, ReferenceTableMeta,
-  SimpleRef, ServiceRef, ContactRef, SourceRef, RefKind, EnrichResult,
+  SimpleRef, ServiceRef, ContactRef, SourceRef, SourceAuthType, RefKind, EnrichResult,
 } from '../../models/models';
+
+/** Copie de travail pour le panneau de configuration d'une source web. */
+interface SourceEdit {
+  id: number;
+  libelle: string;
+  rendu_js: boolean;
+  auth_type: SourceAuthType;
+  auth_user: string;
+  auth_header: string;
+  secret: string;
+  secretSet: boolean;
+}
 
 /** État du panneau d'enrichissement d'un contact. */
 interface EnrichState {
@@ -45,6 +57,9 @@ export class RefsPageComponent implements OnInit {
   // Enrichissement des contacts
   enrichSourceId = signal<number | null>(null);
   enrich = signal<EnrichState | null>(null);
+
+  // Configuration (rendu JS + authentification) d'une source web
+  sourceEdit = signal<SourceEdit | null>(null);
 
   meta = computed<ReferenceTableMeta | undefined>(() =>
     this.refs.tables().find(t => t.name === this.current())
@@ -88,6 +103,8 @@ export class RefsPageComponent implements OnInit {
   private val(ev: Event): string {
     return (ev.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
   }
+  /** Version publique (utilisée par les liaisons de template). */
+  v(ev: Event): string { return this.val(ev); }
   private valOrNull(ev: Event): string | null {
     const v = this.val(ev);
     return v === '' ? null : v;
@@ -208,6 +225,42 @@ export class RefsPageComponent implements OnInit {
     if (!url || url === v.url) return;
     this.patch(v.id, { url } as Partial<SourceRef>);
   }
+  toggleRenduJs(v: SourceRef) {
+    this.patch(v.id, { rendu_js: v.rendu_js ? 0 : 1 } as Partial<SourceRef>);
+  }
+
+  // Panneau de configuration (rendu JS + auth)
+  openSourceConfig(v: SourceRef) {
+    this.sourceEdit.set({
+      id: v.id,
+      libelle: v.libelle,
+      rendu_js: !!v.rendu_js,
+      auth_type: (v.auth_type ?? 'none'),
+      auth_user: v.auth_user ?? '',
+      auth_header: v.auth_header ?? '',
+      secret: '',
+      secretSet: !!v.auth_secret_set,
+    });
+  }
+  updateSourceEdit(patch: Partial<SourceEdit>) {
+    const e = this.sourceEdit();
+    if (e) this.sourceEdit.set({ ...e, ...patch });
+  }
+  saveSourceConfig() {
+    const e = this.sourceEdit();
+    if (!e) return;
+    const body: Partial<SourceRef> = {
+      rendu_js: e.rendu_js ? 1 : 0,
+      auth_type: e.auth_type,
+      auth_user: e.auth_type === 'basic' ? (e.auth_user.trim() || null) : null,
+      auth_header: e.auth_type === 'header' ? (e.auth_header.trim() || null) : null,
+    };
+    // Le secret n'est envoyé que s'il a été saisi (sinon inchangé côté serveur).
+    if (e.secret) body.auth_secret = e.secret;
+    this.patch(e.id, body);
+    this.sourceEdit.set(null);
+  }
+  closeSourceConfig() { this.sourceEdit.set(null); }
 
   /* ====================================================================== */
   /*  Enrichissement d'un contact depuis une source web                      */

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { db } from '../db/client.js';
+import { fetchPage } from '../services/pageFetcher.js';
 
 const router = Router();
 
@@ -147,23 +148,15 @@ router.post('/', async (req, res, next) => {
 
     const url = buildUrl(String(src.url), nom);
 
-    // Récupération de la page côté serveur (avec délai maximal)
+    // Récupération de la page côté serveur (fetch, ou navigateur headless si
+    // la source demande un rendu JavaScript), avec authentification éventuelle.
     let html;
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 10000);
-      const resp = await fetch(url, {
-        signal: ctrl.signal,
-        redirect: 'follow',
-        headers: { 'User-Agent': 'task-manager-enrich/1.0', 'Accept': 'text/html,*/*' },
-      });
-      clearTimeout(timer);
-      if (!resp.ok) {
-        return res.status(502).json({ error: `La source a répondu ${resp.status} ${resp.statusText}`, url });
-      }
-      html = await resp.text();
+      html = await fetchPage(src, url, { timeoutMs: src.rendu_js ? 20000 : 10000 });
     } catch (e) {
-      const reason = e?.name === 'AbortError' ? 'délai dépassé' : (e?.message ?? String(e));
+      const reason = e?.name === 'AbortError' || /Timeout/i.test(e?.message ?? '')
+        ? 'délai dépassé'
+        : (e?.message ?? String(e));
       return res.status(502).json({ error: 'Impossible de joindre la source : ' + reason, url });
     }
 
