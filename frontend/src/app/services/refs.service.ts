@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, tap, forkJoin } from 'rxjs';
+import { Observable, tap, forkJoin, of, catchError } from 'rxjs';
 import {
   ReferenceTableMeta, RefRow,
   SimpleRef, ServiceRef, ContactRef, SourceRef, EnrichResult,
@@ -21,15 +21,19 @@ export class RefsService {
   readonly sourcesWeb = signal<SourceRef[]>([]);
 
   loadAll(): Observable<unknown> {
+    // Chaque requête est isolée : l'échec d'un référentiel (ex. backend pas
+    // encore migré pour "sources_web") ne doit pas vider tout le menu.
+    const safe = <T>(url: string, fallback: T): Observable<T> =>
+      this.http.get<T>(url).pipe(catchError(() => of(fallback)));
     return forkJoin({
-      tables:   this.http.get<ReferenceTableMeta[]>(this.base),
-      entites:  this.http.get<SimpleRef[]>(`${this.base}/entites`),
-      services: this.http.get<ServiceRef[]>(`${this.base}/services`),
-      contacts: this.http.get<ContactRef[]>(`${this.base}/contacts`),
-      roles:    this.http.get<SimpleRef[]>(`${this.base}/roles`),
-      etats:    this.http.get<SimpleRef[]>(`${this.base}/etats`),
-      domaines: this.http.get<SimpleRef[]>(`${this.base}/domaines`),
-      sourcesWeb: this.http.get<SourceRef[]>(`${this.base}/sources_web`),
+      tables:   safe<ReferenceTableMeta[]>(this.base, []),
+      entites:  safe<SimpleRef[]>(`${this.base}/entites`, []),
+      services: safe<ServiceRef[]>(`${this.base}/services`, []),
+      contacts: safe<ContactRef[]>(`${this.base}/contacts`, []),
+      roles:    safe<SimpleRef[]>(`${this.base}/roles`, []),
+      etats:    safe<SimpleRef[]>(`${this.base}/etats`, []),
+      domaines: safe<SimpleRef[]>(`${this.base}/domaines`, []),
+      sourcesWeb: safe<SourceRef[]>(`${this.base}/sources_web`, []),
     }).pipe(tap(r => {
       this.tables.set(r.tables);
       this.entites.set(r.entites);

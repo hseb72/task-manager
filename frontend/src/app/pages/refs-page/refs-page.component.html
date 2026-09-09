@@ -84,7 +84,7 @@
                    [value]="newSourceLibelle()"
                    (input)="setAddField('sourceLibelle', $event)"
                    style="max-width: 220px">
-            <input placeholder="https://intranet/annuaire?q={nom}"
+            <input placeholder="https://intranet/annuaire/{nom}"
                    [value]="newSourceUrl()"
                    (input)="setAddField('sourceUrl', $event)"
                    (keydown.enter)="add()"
@@ -92,8 +92,10 @@
             <button class="btn primary" (click)="add()">Ajouter</button>
           </div>
           <div class="muted mb-2" style="font-size: 0.78rem">
-            Le marqueur <code>&#123;nom&#125;</code> est remplacé par le nom du contact (encodé) lors de l'enrichissement.
-            Sans marqueur, le nom est ajouté en paramètre <code>?q=</code>.
+            Placez le marqueur <code>&#123;nom&#125;</code> où le nom doit apparaître (chemin
+            <code>/annuaire/&#123;nom&#125;</code> ou paramètre <code>?q=&#123;nom&#125;</code>) ; il est
+            remplacé par le nom du contact, encodé (les espaces deviennent <code>%20</code>).
+            Uniquement <em>en l'absence</em> de marqueur, le nom est ajouté en <code>?q=</code>.
           </div>
         }
       }

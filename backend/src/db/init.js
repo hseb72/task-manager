@@ -340,7 +340,7 @@ export async function seedIfEmpty() {
   if (Number(cSrc[0].c) === 0) {
     await db.execute({
       sql: 'INSERT INTO sources_web (libelle, url, actif) VALUES (?, ?, ?)',
-      args: ['Annuaire interne (exemple)', 'https://intranet.example.com/annuaire?q={nom}', 0],
+      args: ['Annuaire interne (exemple)', 'https://intranet.example.com/annuaire/{nom}', 0],
     });
     console.log('✓ Référentiel "sources_web" rempli (exemple)');
   }
