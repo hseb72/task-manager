@@ -5,7 +5,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { firstValueFrom } from 'rxjs';
-import { OcrService } from '../../services/ocr.service';
+import { OcrService, OcrLine } from '../../services/ocr.service';
 import { RefsService } from '../../services/refs.service';
 import { ContactRef, ServiceRef } from '../../models/models';
 
@@ -80,7 +80,7 @@ export class ServiceEnrichDialogComponent {
     try {
       const ocr = await this.ocrSrv.recognize(file);
       this.rawText.set(ocr.text ?? '');
-      const people = this.parseTiles(ocr.lines.map(l => l.text));
+      const people = this.parseTilesSpatial(ocr.lines as any, ocr.imageWidth || 1000);
       this.decisions.set(people.map(p => {
         const match = this.findExisting(p.nom);
         return {
@@ -103,40 +103,92 @@ export class ServiceEnrichDialogComponent {
   /* ------------------------------------------------------------------ */
 
   /**
-   * Chaque tuile : (photo/initiales) → Nom Prénom → « id - rôle » → « Interne/Externe ».
-   * On repère les lignes « id - rôle » (id comportant un chiffre), le nom est la
-   * ligne juste au-dessus ; la mention interne/externe et l'id sont ignorés.
+   * Reconstruction « en grille » des tuiles à partir des coordonnées OCR, afin
+   * de ne plus dépendre de l'ordre de lecture (qui entrelace les colonnes) :
+   *  1. regroupement des lignes en colonnes (par position X du bord gauche) ;
+   *  2. découpage de chaque colonne en tuiles (par écart vertical) ;
+   *  3. classification de chaque tuile (nom, fonction).
    */
-  private parseTiles(lines: string[]): Array<{ nom: string; fonction: string }> {
-    const people: Array<{ nom: string; fonction: string }> = [];
-    for (let i = 0; i < lines.length; i++) {
-      const ir = this.idRole(lines[i] ?? '');
-      if (!ir) continue;
-      let nom = '';
-      for (let j = i - 1; j >= 0 && j >= i - 3; j--) {
-        if (this.looksLikeName(lines[j] ?? '')) { nom = (lines[j] ?? '').trim(); break; }
+  private parseTilesSpatial(raw: OcrLine[], imageWidth: number): Array<{ nom: string; fonction: string }> {
+    const lines = (raw ?? []).filter(l => (l.text ?? '').trim());
+    if (lines.length === 0) return [];
+
+    // 1. Colonnes : regroupement par bord gauche (x0).
+    const tol = Math.max(40, imageWidth * 0.08);
+    const cols: { x: number; lines: OcrLine[] }[] = [];
+    for (const l of [...lines].sort((a, b) => a.bbox.x0 - b.bbox.x0)) {
+      let c = cols.find(c => Math.abs(c.x - l.bbox.x0) <= tol);
+      if (!c) { c = { x: l.bbox.x0, lines: [] }; cols.push(c); }
+      c.lines.push(l);
+      c.x = Math.min(c.x, l.bbox.x0);
+    }
+    cols.sort((a, b) => a.x - b.x);
+
+    // 2. Tuiles : découpage vertical de chaque colonne.
+    const tiles: OcrLine[][] = [];
+    for (const col of cols) {
+      const sorted = col.lines.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+      let cur: OcrLine[] = [];
+      let prev: OcrLine | null = null;
+      for (const l of sorted) {
+        if (prev) {
+          const gap = l.bbox.y0 - prev.bbox.y1;
+          const h = Math.max(8, prev.bbox.y1 - prev.bbox.y0);
+          if (gap > h * 1.7) { if (cur.length) tiles.push(cur); cur = []; }
+        }
+        cur.push(l);
+        prev = l;
       }
-      if (nom) people.push({ nom: this.cleanName(nom), fonction: ir.role });
+      if (cur.length) tiles.push(cur);
+    }
+
+    // 3. Classification.
+    const people: Array<{ nom: string; fonction: string }> = [];
+    for (const t of tiles) {
+      const p = this.classifyTile(t.sort((a, b) => a.bbox.y0 - b.bbox.y0));
+      if (p) people.push(p);
     }
     return people;
   }
 
-  /** « U012345 - Chef de projet » → { id, role }. L'id doit contenir un chiffre. */
-  private idRole(text: string): { id: string; role: string } | null {
-    const m = text.trim().match(/^(\S{2,20})\s*[-–—]\s*(.+)$/);
-    if (m && /\d/.test(m[1]!)) return { id: m[1]!, role: m[2]!.trim() };
-    return null;
+  /**
+   * Classe les lignes d'une tuile : le NOM est la ligne avec des lettres et
+   * SANS chiffre (ce qui écarte l'UID et la ligne « id - rôle ») ; la FONCTION
+   * est le texte après le tiret (« U12 - Chef de projet » → « Chef de projet »),
+   * éventuellement complété par la ligne descriptive suivante (rôle sur 2 lignes).
+   * Les initiales seules et la mention interne/externe sont ignorées.
+   */
+  private classifyTile(tile: OcrLine[]): { nom: string; fonction: string } | null {
+    const kept = tile.map(l => (l.text ?? '').trim())
+      .filter(t => t && !this.isIgnoreLine(t) && !/^[A-ZÀ-Ý]{1,3}$/.test(t));
+
+    const nom = kept.find(t =>
+      /[A-Za-zÀ-ÿ]/.test(t) && !/\d/.test(t) && t.split(/\s+/).filter(Boolean).length <= 5);
+    if (!nom) return null;
+
+    let fonction = '';
+    for (let i = 0; i < kept.length; i++) {
+      const t = kept[i]!;
+      if (t === nom) continue;
+      const m = t.match(/[-–—]\s*(.+)$/);
+      if (m && /[A-Za-zÀ-ÿ]/.test(m[1]!)) {
+        fonction = m[1]!.trim();
+        const nxt = kept[i + 1];
+        if (nxt && nxt !== nom && /[A-Za-zÀ-ÿ]/.test(nxt) && !/[-–—]/.test(nxt) && !/\d/.test(nxt)) {
+          fonction += ' ' + nxt.trim();   // rôle sur deux lignes
+        }
+        break;
+      }
+    }
+    if (!fonction) {
+      const leftover = kept.find(t => t !== nom && /[A-Za-zÀ-ÿ]/.test(t) && /\s/.test(t) && !/\d/.test(t));
+      if (leftover) fonction = leftover;
+    }
+    return { nom: this.cleanName(nom), fonction: fonction.trim() };
   }
+
   private isIgnoreLine(text: string): boolean {
     return /^(interne|externe|intern|external)\b/i.test(text.trim());
-  }
-  private looksLikeName(text: string): boolean {
-    const s = text.trim();
-    if (!s || this.isIgnoreLine(s) || this.idRole(s)) return false;
-    if (/^[A-ZÀ-Ý]{1,3}$/.test(s)) return false;           // initiales seules
-    if (!/[A-Za-zÀ-ÿ]/.test(s)) return false;
-    const words = s.split(/\s+/).filter(Boolean);
-    return words.length >= 1 && words.length <= 6;
   }
   private cleanName(s: string): string {
     return s.replace(/\s+/g, ' ').trim();
