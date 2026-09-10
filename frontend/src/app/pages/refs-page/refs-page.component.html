@@ -13,7 +13,7 @@
         <a [routerLink]="['/referentiels', t.name]" routerLinkActive="active">
           <span>{{ t.label }}</span>
           <span class="count mono">
-            @if (t.name === current()) {{{ values().length }}}
+            @if (t.name === current()) {{{ total() }}}
           </span>
         </a>
       }
@@ -94,8 +94,23 @@
         </div>
       }
 
-      @if (values().length === 0) {
-        <div class="empty-state">Aucune valeur dans cette liste.</div>
+      <!-- Recherche (côté serveur) -->
+      <div class="row gap-sm mb-2">
+        <input type="search" placeholder="Rechercher…"
+               [value]="search()" (input)="onSearch($event)"
+               style="max-width: 320px">
+        @if (search()) {
+          <span class="muted" style="font-size: 0.8rem; align-self: center">
+            {{ total() }} résultat(s)
+          </span>
+        }
+      </div>
+
+      @if (total() === 0) {
+        <div class="empty-state">
+          @if (search()) { Aucun résultat pour « {{ search() }} ». }
+          @else { Aucune valeur dans cette liste. }
+        </div>
       } @else {
         <!-- ============================================================ -->
         <!-- Tableau, variant selon le type                                -->
@@ -255,11 +270,11 @@
             <select [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)"
                     style="border: 1px solid var(--line)">
               @for (n of pageSizes; track n) {
-                <option [ngValue]="n">{{ n === 0 ? 'Tout' : n }}</option>
+                <option [ngValue]="n">{{ n }}</option>
               }
             </select>
           </label>
-          <span class="muted">{{ rangeStart() }}–{{ rangeEnd() }} sur {{ sorted().length }}</span>
+          <span class="muted">{{ rangeStart() }}–{{ rangeEnd() }} sur {{ total() }}</span>
           <span class="row gap-sm" style="margin-left: auto">
             <button class="btn tight" (click)="prevPage()" [disabled]="pageIndex() === 0">‹ Précédent</button>
             <span class="muted">Page {{ pageIndex() + 1 }} / {{ pageCount() }}</span>

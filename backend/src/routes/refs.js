@@ -73,6 +73,55 @@ function selectByIdQuery(table) {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Liste paginée / triée / recherchée (côté serveur)                          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Configuration par type : clause FROM/JOIN, colonnes projetées, colonnes de
+ * recherche (LIKE), correspondance clé de tri → expression SQL (liste blanche),
+ * tri par défaut et clé primaire (tri secondaire stable).
+ */
+function listConfig(table) {
+  const kind = getKind(table);
+  if (kind === 'service') {
+    return {
+      from: 'FROM services s LEFT JOIN entites e ON s.entite_id = e.id',
+      cols: 's.*, e.libelle AS entite_libelle',
+      searchCols: ['s.libelle', 'e.libelle'],
+      sortMap: {
+        id: 's.id', libelle: 's.libelle COLLATE NOCASE',
+        entite_libelle: 'e.libelle COLLATE NOCASE', actif: 's.actif',
+      },
+      defaultSort: 's.libelle COLLATE NOCASE', pk: 's.id',
+    };
+  }
+  if (kind === 'contact') {
+    return {
+      from: `FROM contacts c
+             LEFT JOIN services s ON c.service_id = s.id
+             LEFT JOIN entites e  ON s.entite_id  = e.id`,
+      cols: `c.*, s.libelle AS service_libelle, s.entite_id AS entite_id, e.libelle AS entite_libelle`,
+      searchCols: ['c.nom', 'c.email', 'c.telephone', 'c.fonction', 's.libelle', 'e.libelle'],
+      sortMap: {
+        id: 'c.id', nom: 'c.nom COLLATE NOCASE',
+        service_libelle: 's.libelle COLLATE NOCASE', entite_libelle: 'e.libelle COLLATE NOCASE',
+        fonction: 'c.fonction COLLATE NOCASE', email: 'c.email COLLATE NOCASE',
+        telephone: 'c.telephone COLLATE NOCASE', actif: 'c.actif',
+      },
+      defaultSort: 'c.nom COLLATE NOCASE', pk: 'c.id',
+    };
+  }
+  // simple
+  return {
+    from: `FROM ${table}`,
+    cols: '*',
+    searchCols: ['libelle'],
+    sortMap: { id: 'id', libelle: 'libelle COLLATE NOCASE', actif: 'actif' },
+    defaultSort: 'libelle COLLATE NOCASE', pk: 'id',
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /*  GET                                                                       */
 /* -------------------------------------------------------------------------- */
 
@@ -82,8 +131,52 @@ router.get('/', (_req, res) => {
 
 router.get('/:table', ensureTable, async (req, res, next) => {
   try {
-    const { rows } = await db.execute(selectQuery(req.params.table));
-    res.json(rows);
+    const table = req.params.table;
+    const q = req.query ?? {};
+
+    // Sans paramètre de pagination/tri/recherche : liste complète (rétro-compat,
+    // utilisée par les listes déroulantes et l'export).
+    const wantsPaged = q.page !== undefined || q.pageSize !== undefined ||
+                       q.sort !== undefined || q.q !== undefined;
+    if (!wantsPaged) {
+      const { rows } = await db.execute(selectQuery(table));
+      return res.json(rows);
+    }
+
+    const cfg = listConfig(table);
+
+    // Recherche (LIKE sur les colonnes texte)
+    const term = String(q.q ?? '').trim();
+    let where = '';
+    const whereArgs = [];
+    if (term) {
+      where = 'WHERE (' + cfg.searchCols.map(c => `${c} LIKE ?`).join(' OR ') + ')';
+      for (const _ of cfg.searchCols) whereArgs.push('%' + term + '%');
+    }
+
+    // Tri (liste blanche) + direction
+    const sortExpr = cfg.sortMap[String(q.sort ?? '')] ?? cfg.defaultSort;
+    const dir = String(q.dir ?? 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+    const orderBy = `ORDER BY ${sortExpr} ${dir}, ${cfg.pk} ASC`;
+
+    // Pagination (bornée)
+    let pageSize = parseInt(String(q.pageSize ?? '25'), 10);
+    if (!Number.isFinite(pageSize) || pageSize < 1) pageSize = 25;
+    pageSize = Math.min(pageSize, 500);
+    let page = parseInt(String(q.page ?? '1'), 10);
+    if (!Number.isFinite(page) || page < 1) page = 1;
+
+    const countSql = `SELECT COUNT(*) AS n ${cfg.from} ${where}`;
+    const { rows: cnt } = await db.execute({ sql: countSql, args: whereArgs });
+    const total = Number(cnt[0]?.n ?? 0);
+    const pageCount = Math.max(1, Math.ceil(total / pageSize));
+    if (page > pageCount) page = pageCount;
+    const offset = (page - 1) * pageSize;
+
+    const rowsSql = `SELECT ${cfg.cols} ${cfg.from} ${where} ${orderBy} LIMIT ? OFFSET ?`;
+    const { rows } = await db.execute({ sql: rowsSql, args: [...whereArgs, pageSize, offset] });
+
+    res.json({ rows, total, page, pageSize, pageCount });
   } catch (err) { next(err); }
 });
 

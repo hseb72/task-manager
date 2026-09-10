@@ -23,7 +23,10 @@ export class RefsPageComponent implements OnInit {
   private route = inject(ActivatedRoute);
 
   current  = signal<string>('entites');
-  values   = signal<RefRow[]>([]);
+  /** Lignes de la PAGE courante (tri / pagination / recherche côté serveur). */
+  rows     = signal<RefRow[]>([]);
+  /** Nombre total de lignes (toutes pages) pour le filtre courant. */
+  total    = signal<number>(0);
   errorMsg = signal<string | null>(null);
 
   // Modèle d'ajout (utilisé selon le kind courant)
@@ -47,48 +50,23 @@ export class RefsPageComponent implements OnInit {
   kind = computed<RefKind>(() => this.meta()?.kind ?? 'simple');
   currentLabel = computed(() => this.meta()?.label ?? this.current());
 
-  /* ----- Tri & pagination ----- */
+  /* ----- Tri & pagination & recherche (côté serveur) ----- */
   sortKey  = signal<string | null>(null);
   sortDir  = signal<'asc' | 'desc'>('asc');
-  pageSize = signal<number>(10);        // 0 = tout afficher
+  pageSize = signal<number>(25);
   pageIndex = signal<number>(0);
-  readonly pageSizes = [10, 25, 50, 0];
+  search   = signal<string>('');
+  readonly pageSizes = [10, 25, 50, 100];
+  private searchTimer: any = null;
 
-  /** Valeurs triées selon la colonne active. */
-  sorted = computed<RefRow[]>(() => {
-    const rows = [...this.values()];
-    const key = this.sortKey();
-    if (!key) return rows;
-    const dir = this.sortDir() === 'asc' ? 1 : -1;
-    return rows.sort((a, b) => {
-      const va = (a as any)[key];
-      const vb = (b as any)[key];
-      if (va == null && vb == null) return 0;
-      if (va == null) return 1;        // valeurs vides en dernier
-      if (vb == null) return -1;
-      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
-      return String(va).localeCompare(String(vb), 'fr', { numeric: true, sensitivity: 'base' }) * dir;
-    });
-  });
-
-  pageCount = computed(() => {
-    const ps = this.pageSize();
-    return ps <= 0 ? 1 : Math.max(1, Math.ceil(this.sorted().length / ps));
-  });
-  /** Lignes de la page courante (après tri + pagination). */
-  paged = computed<RefRow[]>(() => {
-    const ps = this.pageSize();
-    if (ps <= 0) return this.sorted();
-    const i = Math.min(this.pageIndex(), this.pageCount() - 1);
-    return this.sorted().slice(i * ps, i * ps + ps);
-  });
-  rangeStart = computed(() => this.sorted().length === 0 ? 0 : (this.pageSize() <= 0 ? 1 : this.pageIndex() * this.pageSize() + 1));
-  rangeEnd   = computed(() => this.pageSize() <= 0 ? this.sorted().length : Math.min(this.sorted().length, (this.pageIndex() + 1) * this.pageSize()));
+  pageCount = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize())));
+  rangeStart = computed(() => this.total() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1);
+  rangeEnd   = computed(() => Math.min(this.total(), (this.pageIndex() + 1) * this.pageSize()));
 
   // Vues typées de la PAGE courante (selon le kind)
-  asSimple   = computed<SimpleRef[]>(()  => this.paged() as SimpleRef[]);
-  asServices = computed<ServiceRef[]>(() => this.paged() as ServiceRef[]);
-  asContacts = computed<ContactRef[]>(() => this.paged() as ContactRef[]);
+  asSimple   = computed<SimpleRef[]>(()  => this.rows() as SimpleRef[]);
+  asServices = computed<ServiceRef[]>(() => this.rows() as ServiceRef[]);
+  asContacts = computed<ContactRef[]>(() => this.rows() as ContactRef[]);
 
   ngOnInit() {
     this.route.paramMap.subscribe(p => {
@@ -98,7 +76,8 @@ export class RefsPageComponent implements OnInit {
       this.sortKey.set(null);          // colonnes différentes selon le référentiel
       this.sortDir.set('asc');
       this.pageIndex.set(0);
-      this.load();
+      this.search.set('');
+      this.fetch();
     });
   }
 
@@ -111,26 +90,50 @@ export class RefsPageComponent implements OnInit {
       this.sortDir.set('asc');
     }
     this.pageIndex.set(0);
+    this.fetch();
   }
   sortArrow(key: string): string {
     if (this.sortKey() !== key) return '';
     return this.sortDir() === 'asc' ? ' ↑' : ' ↓';
   }
-  setPageSize(n: number) { this.pageSize.set(n); this.pageIndex.set(0); }
-  prevPage() { if (this.pageIndex() > 0) this.pageIndex.update(i => i - 1); }
-  nextPage() { if (this.pageIndex() < this.pageCount() - 1) this.pageIndex.update(i => i + 1); }
+  setPageSize(n: number) { this.pageSize.set(n); this.pageIndex.set(0); this.fetch(); }
+  prevPage() { if (this.pageIndex() > 0) { this.pageIndex.update(i => i - 1); this.fetch(); } }
+  nextPage() { if (this.pageIndex() < this.pageCount() - 1) { this.pageIndex.update(i => i + 1); this.fetch(); } }
+  onSearch(ev: Event) {
+    this.search.set(this.val(ev));
+    this.pageIndex.set(0);
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(() => this.fetch(), 250);   // anti-rebond
+  }
 
-  load() {
+  /** Récupère la page courante depuis le serveur. */
+  fetch() {
     this.errorMsg.set(null);
-    this.refs.list(this.current()).subscribe({
-      next: vs => {
-        this.values.set(vs);
-        this.refs.refreshSignal(this.current(), vs);
-        // Reste dans les bornes après ajout/suppression.
-        this.pageIndex.set(Math.min(this.pageIndex(), this.pageCount() - 1));
+    this.refs.listPaged(this.current(), {
+      page: this.pageIndex() + 1,
+      pageSize: this.pageSize(),
+      sort: this.sortKey(),
+      dir: this.sortDir(),
+      q: this.search(),
+    }).subscribe({
+      next: res => {
+        this.rows.set(res.rows);
+        this.total.set(res.total);
+        if (res.page - 1 !== this.pageIndex()) this.pageIndex.set(res.page - 1);
       },
       error: err => this.errorMsg.set(err?.error?.error ?? err.message ?? 'Erreur'),
     });
+  }
+
+  /**
+   * Après une mutation : recharge la page affichée et, pour les petits
+   * référentiels servant de listes déroulantes (hors contacts), rafraîchit leur
+   * liste complète afin que les sélecteurs restent à jour.
+   */
+  private afterMutation() {
+    this.fetch();
+    const t = this.current();
+    if (t !== 'contacts') this.refs.reload(t).subscribe();
   }
 
   /* ====================================================================== */
@@ -191,7 +194,7 @@ export class RefsPageComponent implements OnInit {
     }
 
     this.refs.create(this.current(), body).subscribe({
-      next: () => { this.resetForm(); this.load(); },
+      next: () => { this.resetForm(); this.afterMutation(); },
       error: err => this.errorMsg.set(err?.error?.error ?? err.message ?? 'Erreur'),
     });
   }
@@ -203,7 +206,7 @@ export class RefsPageComponent implements OnInit {
   /** Patch générique : remonte au backend puis recharge pour récupérer les libellés joints. */
   private patch(id: number, body: Partial<RefRow>) {
     this.refs.update(this.current(), id, body).subscribe({
-      next: () => this.load(),
+      next: () => this.afterMutation(),
       error: err => this.errorMsg.set(err?.error?.error ?? err.message ?? 'Erreur'),
     });
   }
@@ -265,7 +268,7 @@ export class RefsPageComponent implements OnInit {
   }
   onServiceEnrichClosed(res: { added: number }) {
     this.enrichService.set(null);
-    if (res.added > 0) this.load();   // rafraîchit le nombre/contenu courant
+    if (res.added > 0) this.fetch();   // le dialogue a déjà rafraîchi les listes complètes
   }
 
   // Commun
@@ -277,7 +280,7 @@ export class RefsPageComponent implements OnInit {
     const label = (v as ContactRef).nom ?? (v as SimpleRef).libelle;
     if (!confirm(`Supprimer "${label}" ? Les enregistrements qui y font référence verront cette caractéristique vidée.`)) return;
     this.refs.delete(this.current(), v.id).subscribe({
-      next: () => this.load(),
+      next: () => this.afterMutation(),
       error: err => this.errorMsg.set(err?.error?.error ?? err.message ?? 'Erreur'),
     });
   }

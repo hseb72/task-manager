@@ -78,7 +78,7 @@ Les bases existantes sont migrées automatiquement au démarrage :
 
 #### Référentiels
 - `GET    /api/refs` — liste les référentiels disponibles
-- `GET    /api/refs/:table` — toutes les valeurs (`entites`, `services`, `contacts`, `roles`, `etats`, `domaines`)
+- `GET    /api/refs/:table` — sans paramètre : **toutes** les valeurs (`entites`, `services`, `contacts`, `roles`, `etats`, `domaines`), utilisé par les listes déroulantes et l'export. Avec `?page=&pageSize=&sort=&dir=&q=` : **liste paginée / triée / recherchée côté serveur** → `{ rows, total, page, pageSize, pageCount }`. `sort` est une clé en liste blanche (id, libellé/nom, entité, service, fonction, email, téléphone, état) ; `q` recherche (LIKE) sur les colonnes texte, y compris les libellés joints (service, entité) ; `pageSize` est borné (≤ 500).
 - `POST   /api/refs/:table` — `{ libelle, actif? }` (contacts : `{ nom, email?, telephone?, service_id?, fonction? }`)
   - **Contacts** : la création est refusée (409) si un contact du **même nom** existe déjà (à la casse et aux espaces près). Le champ **`fonction`** (intitulé de poste / fonction organisationnelle) est optionnel et nullable.
 - `PUT    /api/refs/:table/:id`
@@ -170,7 +170,7 @@ Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
 ### b) Page `Référentiels`
 - Menu latéral pour basculer entre les référentiels.
 - Ajout, renommage, désactivation (actif/inactif) et suppression des valeurs.
-- Tableaux **triables** (clic sur un en-tête, indicateur ↑/↓) et **paginés** (10 / 25 / 50 / Tout, navigation ‹ Précédent / Suivant ›, libellé « X–Y sur Z »).
+- Tableaux **triables**, **paginés** et **recherchables** — **côté serveur** (conçu pour de gros volumes) : clic sur un en-tête (indicateur ↑/↓), taille de page 10 / 25 / 50 / 100, navigation ‹ Précédent / Suivant › avec « X–Y sur Z », et champ de recherche (LIKE serveur, y compris sur les libellés joints service/entité).
 - Les valeurs renommées se propagent immédiatement aux listes déroulantes de la page principale.
 - **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Colonne **Fonction** (éditable, nullable). Bouton **🔎 Enrichir** par contact : on dépose la **capture de la fiche annuaire** ; le **service** et l'**entité (métier)** sont déduits, rapprochés des référentiels, et **créables à la volée** si absents, puis appliqués (`service_id`, l'entité en découlant).
 - **Services** : bouton **🔎 Enrichir** par service : on dépose une **capture des tuiles de contacts** ; nom et rôle (→ **fonction**) sont extraits par tuile (id et interne/externe ignorés) et, après validation (créer / lier / ignorer), les contacts sont **rattachés au service**. Tout se passe dans le navigateur — aucun accès réseau à l'annuaire.

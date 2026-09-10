@@ -1,10 +1,27 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, tap, forkJoin, of, catchError } from 'rxjs';
 import {
   ReferenceTableMeta, RefRow,
   SimpleRef, ServiceRef, ContactRef,
 } from '../models/models';
+
+/** Résultat paginé d'un référentiel (tri / recherche côté serveur). */
+export interface PagedResult<T = RefRow> {
+  rows: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+}
+
+export interface ListQuery {
+  page: number;
+  pageSize: number;
+  sort?: string | null;
+  dir?: 'asc' | 'desc';
+  q?: string;
+}
 
 @Injectable({ providedIn: 'root' })
 export class RefsService {
@@ -45,6 +62,21 @@ export class RefsService {
 
   list(table: string): Observable<RefRow[]> {
     return this.http.get<RefRow[]>(`${this.base}/${table}`);
+  }
+
+  /** Recharge la liste complète d'un référentiel et met à jour son signal (listes déroulantes). */
+  reload(table: string): Observable<RefRow[]> {
+    return this.list(table).pipe(tap(vs => this.refreshSignal(table, vs)));
+  }
+
+  /** Liste paginée / triée / recherchée (côté serveur). */
+  listPaged(table: string, opts: ListQuery): Observable<PagedResult> {
+    let params = new HttpParams()
+      .set('page', String(opts.page))
+      .set('pageSize', String(opts.pageSize));
+    if (opts.sort) params = params.set('sort', opts.sort).set('dir', opts.dir ?? 'asc');
+    if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
+    return this.http.get<PagedResult>(`${this.base}/${table}`, { params });
   }
   create(table: string, body: Partial<RefRow>): Observable<RefRow> {
     return this.http.post<RefRow>(`${this.base}/${table}`, body);
