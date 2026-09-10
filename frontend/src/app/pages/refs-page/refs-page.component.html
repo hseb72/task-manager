@@ -78,26 +78,6 @@
             <button class="btn primary" (click)="add()">Ajouter</button>
           </div>
         }
-        @case ('source') {
-          <div class="row gap-sm mb-2">
-            <input placeholder="Libellé de la source…"
-                   [value]="newSourceLibelle()"
-                   (input)="setAddField('sourceLibelle', $event)"
-                   style="max-width: 220px">
-            <input placeholder="https://intranet/annuaire/{nom}"
-                   [value]="newSourceUrl()"
-                   (input)="setAddField('sourceUrl', $event)"
-                   (keydown.enter)="add()"
-                   style="flex: 1; min-width: 260px">
-            <button class="btn primary" (click)="add()">Ajouter</button>
-          </div>
-          <div class="muted mb-2" style="font-size: 0.78rem">
-            Placez le marqueur <code>&#123;nom&#125;</code> où le nom doit apparaître (chemin
-            <code>/annuaire/&#123;nom&#125;</code> ou paramètre <code>?q=&#123;nom&#125;</code>) ; il est
-            remplacé par le nom du contact, encodé (les espaces deviennent <code>%20</code>).
-            Uniquement <em>en l'absence</em> de marqueur, le nom est ajouté en <code>?q=</code>.
-          </div>
-        }
       }
 
       @if (errorMsg()) {
@@ -105,23 +85,10 @@
       }
 
       @if (kind() === 'contact') {
-        @if (activeSources().length > 0) {
-          <div class="row gap-sm mb-2" style="font-size: 0.82rem; align-items: center">
-            <span class="muted">Source d'enrichissement :</span>
-            <select [ngModel]="enrichSourceId()" (ngModelChange)="enrichSourceId.set($event)"
-                    style="border: 1px solid var(--line); max-width: 240px">
-              @for (s of activeSources(); track s.id) {
-                <option [ngValue]="s.id">{{ s.libelle }}</option>
-              }
-            </select>
-            <span class="muted">— bouton 🔎 par ligne pour déduire service &amp; entité.</span>
-          </div>
-        } @else {
-          <div class="muted mb-2" style="font-size: 0.8rem">
-            Astuce : ajoutez une <a [routerLink]="['/referentiels', 'sources_web']">source web</a>
-            active pour enrichir les contacts (service &amp; entité) depuis votre annuaire interne.
-          </div>
-        }
+        <div class="muted mb-2" style="font-size: 0.8rem">
+          Bouton <strong>🔎 Enrichir</strong> par ligne : déposez une <strong>capture de la fiche annuaire</strong>
+          du contact ; le service et l'entité sont déduits et rapprochés des référentiels.
+        </div>
       }
 
       @if (values().length === 0) {
@@ -254,66 +221,9 @@
                     </td>
                     <td>
                       <button class="btn tight" (click)="openEnrich(v)"
-                              [disabled]="activeSources().length === 0"
-                              title="Enrichir depuis une source web (service &amp; entité)">
+                              title="Enrichir depuis une capture de la fiche annuaire (service &amp; entité)">
                         🔎 Enrichir
                       </button>
-                    </td>
-                    <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          }
-          @case ('source') {
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th style="width: 60px">ID</th>
-                  <th style="min-width: 160px">Libellé</th>
-                  <th>URL (gabarit)</th>
-                  <th style="width: 80px">Rendu</th>
-                  <th style="width: 110px">Auth</th>
-                  <th style="width: 110px">État</th>
-                  <th style="width: 70px"></th>
-                  <th style="width: 60px"></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (v of asSources(); track trackById($index, v)) {
-                  <tr>
-                    <td class="id-col">#{{ v.id }}</td>
-                    <td>
-                      <input class="cell-input" [value]="v.libelle"
-                             (change)="renameSource(v, $event)">
-                    </td>
-                    <td>
-                      <input class="cell-input mono" [value]="v.url"
-                             (change)="changeSourceUrl(v, $event)">
-                    </td>
-                    <td>
-                      <button class="btn tight" (click)="toggleRenduJs(v)"
-                              title="Basculer le rendu JavaScript (navigateur headless)">
-                        @if (v.rendu_js) {<span class="badge ok">JS</span>}
-                        @else {<span class="badge">HTML</span>}
-                      </button>
-                    </td>
-                    <td>
-                      @if (v.auth_type && v.auth_type !== 'none') {
-                        <span class="badge ok">{{ v.auth_type }}</span>
-                      } @else {
-                        <span class="badge">aucune</span>
-                      }
-                    </td>
-                    <td>
-                      <button class="btn tight" (click)="toggleActif(v)">
-                        @if (v.actif) {<span class="badge ok">Actif</span>}
-                        @else {<span class="badge">Inactif</span>}
-                      </button>
-                    </td>
-                    <td>
-                      <button class="btn tight" (click)="openSourceConfig(v)"
-                              title="Configurer le rendu et l'authentification">⚙</button>
                     </td>
                     <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
                   </tr>
@@ -328,184 +238,8 @@
 </div>
 
 <!-- ====================================================================== -->
-<!-- Panneau d'enrichissement d'un contact                                    -->
+<!-- Enrichissement d'un contact par capture d'écran (OCR)                    -->
 <!-- ====================================================================== -->
-@if (enrich(); as st) {
-  <div class="modal-backdrop" (click)="closeEnrich()">
-    <div class="modal" (click)="$event.stopPropagation()" style="max-width: 560px">
-      <div class="modal-head">
-        <div>
-          <h2>Enrichir « {{ st.contact.nom }} »</h2>
-          <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
-            Recherche du service et de l'entité (métier) de rattachement.
-          </div>
-        </div>
-        <button class="icon-btn" (click)="closeEnrich()">✕</button>
-      </div>
-
-      <div class="modal-body">
-        @if (st.loading) {
-          <div class="empty-state">Consultation de la source web…</div>
-        } @else if (st.error) {
-          <div class="empty-state" style="color: var(--danger)">{{ st.error }}</div>
-        } @else if (st.result; as r) {
-          <div class="mb-2" style="font-size: 0.82rem">
-            Source : <strong>{{ r.source.libelle }}</strong> —
-            <a [href]="r.url" target="_blank" rel="noopener">ouvrir la page ↗</a>
-            @if (r.url1) {
-              · <a [href]="r.url1" target="_blank" rel="noopener">étape 1 ↗</a>
-            }
-          </div>
-          @if (r.uid) {
-            <div class="mb-2" style="font-size: 0.82rem">
-              UID détecté : <strong class="mono">{{ r.uid }}</strong>
-            </div>
-          }
-
-          <table class="data-table">
-            <tbody>
-              <tr>
-                <td style="width: 130px" class="muted">Service détecté</td>
-                <td>
-                  <strong>{{ r.deduced.service ?? '—' }}</strong>
-                  @if (r.serviceMatch) {
-                    <span class="badge ok" style="margin-left: 0.4rem">↦ {{ r.serviceMatch.libelle }}</span>
-                  } @else if (r.deduced.service) {
-                    <span class="badge" style="margin-left: 0.4rem">aucun service correspondant</span>
-                  }
-                </td>
-              </tr>
-              <tr>
-                <td class="muted">Entité (métier)</td>
-                <td>
-                  <strong>{{ r.deduced.entite ?? '—' }}</strong>
-                  @if (r.serviceMatch?.entite_libelle) {
-                    <span class="badge ok" style="margin-left: 0.4rem">↦ {{ r.serviceMatch!.entite_libelle }}</span>
-                  } @else if (r.entiteMatch) {
-                    <span class="badge" style="margin-left: 0.4rem">↦ {{ r.entiteMatch.libelle }} (aucun service rattaché)</span>
-                  }
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          @if (!r.deduced.service && !r.deduced.entite) {
-            <div class="muted mt-2" style="font-size: 0.8rem">
-              Aucune information de service/entité trouvée sur la page ({{ r.pairsFound }} champ(s) analysé(s)).
-              Vérifiez le gabarit d'URL de la source.
-            </div>
-          }
-          @if (r.serviceMatch) {
-            <div class="muted mt-2" style="font-size: 0.8rem">
-              « Appliquer » rattachera le contact au service <strong>{{ r.serviceMatch.libelle }}</strong>
-              (l'entité en découle).
-            </div>
-          }
-        }
-      </div>
-
-      <div class="modal-foot">
-        <button class="btn" (click)="closeEnrich()">Fermer</button>
-        @if (st.result?.serviceMatch) {
-          <button class="btn primary" (click)="applyEnrich()">Appliquer le rattachement</button>
-        }
-      </div>
-    </div>
-  </div>
-}
-
-<!-- ====================================================================== -->
-<!-- Configuration d'une source web (rendu JS + authentification)             -->
-<!-- ====================================================================== -->
-@if (sourceEdit(); as e) {
-  <div class="modal-backdrop" (click)="closeSourceConfig()">
-    <div class="modal" (click)="$event.stopPropagation()" style="max-width: 520px">
-      <div class="modal-head">
-        <div>
-          <h2>Configurer « {{ e.libelle }} »</h2>
-          <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
-            Rendu de la page et authentification de l'annuaire interne.
-          </div>
-        </div>
-        <button class="icon-btn" (click)="closeSourceConfig()">✕</button>
-      </div>
-
-      <div class="modal-body">
-        <label class="row gap-sm" style="margin-bottom: 0.8rem">
-          <input type="checkbox" [checked]="e.rendu_js"
-                 (change)="updateSourceEdit({ rendu_js: !e.rendu_js })">
-          <span>Rendu JavaScript (navigateur headless — pour les pages dont le contenu est injecté en JS)</span>
-        </label>
-
-        <div class="card" style="margin-bottom: 0.8rem; padding: 0.7rem">
-          <label style="margin-bottom: 0.2rem">Recherche en deux étapes (optionnel)</label>
-          <div class="muted mb-2" style="font-size: 0.76rem">
-            Quand la 1ʳᵉ page (recherche par nom) ne fournit qu'un <strong>UID</strong>, indiquez ici
-            l'URL de détail à enchaîner (marqueur <code>&#123;uid&#125;</code>) et, si besoin, la règle
-            d'extraction de l'UID.
-          </div>
-          <label style="font-weight: normal">URL de détail (2ᵉ étape)</label>
-          <input class="mono" [value]="e.url_uid"
-                 (input)="updateSourceEdit({ url_uid: v($event) })"
-                 placeholder="https://intranet/fiche?uid={uid}">
-          <label class="mt-2" style="font-weight: normal">Extraction UID — regex (groupe 1)</label>
-          <input class="mono" [value]="e.uid_regex"
-                 (input)="updateSourceEdit({ uid_regex: v($event) })"
-                 placeholder="uid[&quot;:=\s]+([A-Za-z0-9]+)">
-          <div class="muted mt-1" style="font-size: 0.74rem">
-            Laissée vide, l'UID est recherché automatiquement (libellé « UID / matricule / identifiant »
-            ou lien contenant <code>uid=</code>).
-          </div>
-        </div>
-
-        <label>Authentification</label>
-        <select [ngModel]="e.auth_type" (ngModelChange)="updateSourceEdit({ auth_type: $event })">
-          <option value="none">Aucune</option>
-          <option value="basic">Basic (identifiant + mot de passe)</option>
-          <option value="bearer">Bearer (jeton)</option>
-          <option value="header">En-tête personnalisé</option>
-          <option value="cookie">Cookie</option>
-        </select>
-
-        @if (e.auth_type === 'basic') {
-          <div class="mt-2">
-            <label>Identifiant</label>
-            <input [value]="e.auth_user" (input)="updateSourceEdit({ auth_user: v($event) })"
-                   placeholder="compte de service">
-          </div>
-        }
-        @if (e.auth_type === 'header') {
-          <div class="mt-2">
-            <label>Nom de l'en-tête</label>
-            <input [value]="e.auth_header" (input)="updateSourceEdit({ auth_header: v($event) })"
-                   placeholder="Authorization">
-          </div>
-        }
-
-        @if (e.auth_type !== 'none') {
-          <div class="mt-2">
-            <label>
-              @switch (e.auth_type) {
-                @case ('basic')  { Mot de passe }
-                @case ('bearer') { Jeton }
-                @case ('header') { Valeur de l'en-tête }
-                @case ('cookie') { Chaîne de cookie (ex. « SID=abc; k=v ») }
-              }
-            </label>
-            <input type="password" autocomplete="new-password"
-                   [value]="e.secret" (input)="updateSourceEdit({ secret: v($event) })"
-                   [placeholder]="e.secretSet ? '•••••••• (défini — laisser vide pour conserver)' : 'saisir la valeur'">
-            <div class="muted mt-1" style="font-size: 0.76rem">
-              Le secret est stocké côté serveur et n'est jamais réaffiché.
-            </div>
-          </div>
-        }
-      </div>
-
-      <div class="modal-foot">
-        <button class="btn" (click)="closeSourceConfig()">Annuler</button>
-        <button class="btn primary" (click)="saveSourceConfig()">Enregistrer</button>
-      </div>
-    </div>
-  </div>
+@if (enrichContact(); as c) {
+  <app-contact-enrich-dialog [contact]="c" (closed)="onEnrichClosed($event)"></app-contact-enrich-dialog>
 }

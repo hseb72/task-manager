@@ -28,7 +28,6 @@ export const REFERENCE_TABLES = [
   { name: 'roles',        label: 'Rôles',                  kind: 'simple'  },
   { name: 'etats',        label: 'États',                  kind: 'simple'  },
   { name: 'domaines',     label: 'Domaines d\'activité',   kind: 'simple'  },
-  { name: 'sources_web',  label: 'Sources web (enrichissement)', kind: 'source' },
 ];
 
 export const SIMPLE_TABLES  = REFERENCE_TABLES.filter(t => t.kind === 'simple').map(t => t.name);
@@ -93,23 +92,11 @@ async function runMigrations() {
     }
   }
 
-  // 2b. Migration de sources_web : ajout du rendu JS et des colonnes d'auth.
+  // 2b. Nettoyage : suppression du référentiel « sources_web » (enrichissement
+  //     par URL abandonné au profit de l'interprétation d'une capture d'écran).
   if (await tableExists('sources_web')) {
-    const cols = [
-      ['rendu_js',    'rendu_js INTEGER NOT NULL DEFAULT 0'],
-      ['auth_type',   'auth_type TEXT'],
-      ['auth_user',   'auth_user TEXT'],
-      ['auth_secret', 'auth_secret TEXT'],
-      ['auth_header', 'auth_header TEXT'],
-      ['url_uid',     'url_uid TEXT'],
-      ['uid_regex',   'uid_regex TEXT'],
-    ];
-    for (const [col, ddl] of cols) {
-      if (!await columnExists('sources_web', col)) {
-        await db.execute(`ALTER TABLE sources_web ADD COLUMN ${ddl}`);
-        console.log(`↻ Migration : sources_web.${col} ajouté`);
-      }
-    }
+    await db.execute('DROP TABLE IF EXISTS sources_web');
+    console.log('↻ Migration : table sources_web supprimée (obsolète)');
   }
 
   // 3. Migration de tache_contacts : ajout de role_id
@@ -172,30 +159,6 @@ export async function initDatabase() {
       actif     INTEGER NOT NULL DEFAULT 1,
       entite_id INTEGER REFERENCES entites(id) ON DELETE SET NULL,
       UNIQUE (libelle, entite_id)
-    )
-  `);
-
-  // ----- Sources web d'enrichissement -----
-  //  url : gabarit d'URL de l'annuaire interne ; le marqueur {nom} (ou {name})
-  //  y est remplacé par le nom du contact (URL-encodé). Sans marqueur, le nom
-  //  est ajouté en fin d'URL.
-  //  rendu_js : 1 = la page est rendue par un navigateur headless (Playwright)
-  //             avant lecture (sites dont le contenu est injecté en JavaScript).
-  //  auth_*   : authentification optionnelle (basic / bearer / header / cookie).
-  await db.execute(`
-    CREATE TABLE IF NOT EXISTS sources_web (
-      id          INTEGER PRIMARY KEY AUTOINCREMENT,
-      libelle     TEXT NOT NULL,
-      url         TEXT NOT NULL,
-      actif       INTEGER NOT NULL DEFAULT 1,
-      rendu_js    INTEGER NOT NULL DEFAULT 0,
-      auth_type   TEXT,
-      auth_user   TEXT,
-      auth_secret TEXT,
-      auth_header TEXT,
-      url_uid     TEXT,
-      uid_regex   TEXT,
-      UNIQUE (libelle)
     )
   `);
 
@@ -333,16 +296,6 @@ export async function seedIfEmpty() {
       });
     }
     console.log('✓ Référentiel "contacts" rempli');
-  }
-
-  // Source web d'enrichissement (exemple / gabarit à adapter)
-  const { rows: cSrc } = await db.execute('SELECT COUNT(*) as c FROM sources_web');
-  if (Number(cSrc[0].c) === 0) {
-    await db.execute({
-      sql: 'INSERT INTO sources_web (libelle, url, actif) VALUES (?, ?, ?)',
-      args: ['Annuaire interne (exemple)', 'https://intranet.example.com/annuaire/{nom}', 0],
-    });
-    console.log('✓ Référentiel "sources_web" rempli (exemple)');
   }
 
   // Tâche d'exemple

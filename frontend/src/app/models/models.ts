@@ -1,4 +1,4 @@
-export type RefKind = 'simple' | 'service' | 'contact' | 'source';
+export type RefKind = 'simple' | 'service' | 'contact';
 
 export interface ReferenceTableMeta {
   name: string;
@@ -35,45 +35,7 @@ export interface ContactRef {
   entite_libelle?: string | null;
 }
 
-/** Type d'authentification d'une source web. */
-export type SourceAuthType = 'none' | 'basic' | 'bearer' | 'header' | 'cookie';
-
-/** Référentiel "source web" : libellé + gabarit d'URL d'enrichissement */
-export interface SourceRef {
-  id: number;
-  libelle: string;
-  url: string;
-  actif: number;
-  /** 1 = la page est rendue par un navigateur headless (contenu injecté en JS). */
-  rendu_js: number;
-  auth_type: SourceAuthType | null;
-  auth_user: string | null;
-  auth_header: string | null;
-  /** Indicateur (lecture seule) : un secret est-il défini ? Le secret n'est jamais renvoyé. */
-  auth_secret_set?: number;
-  /** Écriture seule : nouveau secret (mot de passe / jeton / cookie). */
-  auth_secret?: string | null;
-  /** 2ᵉ étape optionnelle : gabarit d'URL de détail contenant {uid}. */
-  url_uid: string | null;
-  /** Regex (groupe 1) pour extraire l'UID de la page de l'étape 1. */
-  uid_regex: string | null;
-}
-
-export type RefRow = SimpleRef | ServiceRef | ContactRef | SourceRef;
-
-/** Résultat d'un enrichissement de contact depuis une source web. */
-export interface EnrichResult {
-  url: string;
-  /** URL de l'étape 1 (recherche par nom) quand un enchaînement UID est utilisé. */
-  url1?: string | null;
-  /** UID extrait de l'étape 1 (si enchaînement à deux étapes). */
-  uid?: string | null;
-  source: { id: number; libelle: string };
-  deduced: { service: string | null; entite: string | null };
-  serviceMatch: { id: number; libelle: string; entite_id: number | null; entite_libelle?: string | null } | null;
-  entiteMatch: { id: number; libelle: string } | null;
-  pairsFound: number;
-}
+export type RefRow = SimpleRef | ServiceRef | ContactRef;
 
 export interface Action {
   id: number;

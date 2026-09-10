@@ -43,17 +43,6 @@ function selectQuery(table) {
       ORDER BY c.nom COLLATE NOCASE ASC
     `;
   }
-  if (kind === 'source') {
-    // On ne renvoie jamais le secret en clair : seul un drapeau indique s'il
-    // est défini.
-    return `
-      SELECT id, libelle, url, actif, rendu_js, auth_type, auth_user, auth_header,
-             url_uid, uid_regex,
-             CASE WHEN auth_secret IS NOT NULL AND auth_secret <> '' THEN 1 ELSE 0 END AS auth_secret_set
-      FROM sources_web
-      ORDER BY libelle COLLATE NOCASE ASC
-    `;
-  }
   // simple
   return `SELECT * FROM ${table} ORDER BY libelle COLLATE NOCASE ASC`;
 }
@@ -78,14 +67,6 @@ function selectByIdQuery(table) {
       LEFT JOIN services s ON c.service_id = s.id
       LEFT JOIN entites e  ON s.entite_id  = e.id
       WHERE c.id = ?
-    `;
-  }
-  if (kind === 'source') {
-    return `
-      SELECT id, libelle, url, actif, rendu_js, auth_type, auth_user, auth_header,
-             url_uid, uid_regex,
-             CASE WHEN auth_secret IS NOT NULL AND auth_secret <> '' THEN 1 ELSE 0 END AS auth_secret_set
-      FROM sources_web WHERE id = ?
     `;
   }
   return `SELECT * FROM ${table} WHERE id = ?`;
@@ -156,28 +137,6 @@ router.post('/:table', ensureTable, async (req, res, next) => {
           b.service_id ?? null,
         ],
       });
-    } else if (kind === 'source') {
-      const libelle = (b.libelle ?? '').trim();
-      const url = (b.url ?? '').trim();
-      if (!libelle) return res.status(400).json({ error: 'Libellé requis' });
-      if (!url)     return res.status(400).json({ error: 'URL requise' });
-      result = await db.execute({
-        sql: `INSERT INTO sources_web
-              (libelle, url, actif, rendu_js, auth_type, auth_user, auth_secret, auth_header,
-               url_uid, uid_regex)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [
-          libelle, url,
-          b.actif === 0 ? 0 : 1,
-          b.rendu_js ? 1 : 0,
-          b.auth_type || null,
-          b.auth_user || null,
-          b.auth_secret || null,
-          b.auth_header || null,
-          b.url_uid || null,
-          b.uid_regex || null,
-        ],
-      });
     }
 
     const { rows } = await db.execute({
@@ -210,10 +169,6 @@ router.put('/:table/:id', ensureTable, async (req, res, next) => {
       service: { libelle: 'libelle', actif: 'actif', entite_id: 'entite_id' },
       contact: { nom: 'nom', email: 'email', telephone: 'telephone',
                  actif: 'actif', service_id: 'service_id' },
-      source:  { libelle: 'libelle', url: 'url', actif: 'actif', rendu_js: 'rendu_js',
-                 auth_type: 'auth_type', auth_user: 'auth_user',
-                 auth_secret: 'auth_secret', auth_header: 'auth_header',
-                 url_uid: 'url_uid', uid_regex: 'uid_regex' },
     };
     const map = fieldMaps[kind];
 

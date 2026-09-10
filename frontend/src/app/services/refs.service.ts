@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, tap, forkJoin, of, catchError } from 'rxjs';
 import {
   ReferenceTableMeta, RefRow,
-  SimpleRef, ServiceRef, ContactRef, SourceRef, EnrichResult,
+  SimpleRef, ServiceRef, ContactRef,
 } from '../models/models';
 
 @Injectable({ providedIn: 'root' })
@@ -18,11 +18,10 @@ export class RefsService {
   readonly roles    = signal<SimpleRef[]>([]);
   readonly etats    = signal<SimpleRef[]>([]);
   readonly domaines = signal<SimpleRef[]>([]);
-  readonly sourcesWeb = signal<SourceRef[]>([]);
 
   loadAll(): Observable<unknown> {
-    // Chaque requête est isolée : l'échec d'un référentiel (ex. backend pas
-    // encore migré pour "sources_web") ne doit pas vider tout le menu.
+    // Chaque requête est isolée : l'échec d'un référentiel ne doit pas faire
+    // échouer tout le forkJoin ni vider le menu latéral.
     const safe = <T>(url: string, fallback: T): Observable<T> =>
       this.http.get<T>(url).pipe(catchError(() => of(fallback)));
     return forkJoin({
@@ -33,7 +32,6 @@ export class RefsService {
       roles:    safe<SimpleRef[]>(`${this.base}/roles`, []),
       etats:    safe<SimpleRef[]>(`${this.base}/etats`, []),
       domaines: safe<SimpleRef[]>(`${this.base}/domaines`, []),
-      sourcesWeb: safe<SourceRef[]>(`${this.base}/sources_web`, []),
     }).pipe(tap(r => {
       this.tables.set(r.tables);
       this.entites.set(r.entites);
@@ -42,13 +40,7 @@ export class RefsService {
       this.roles.set(r.roles);
       this.etats.set(r.etats);
       this.domaines.set(r.domaines);
-      this.sourcesWeb.set(r.sourcesWeb);
     }));
-  }
-
-  /** Enrichit un contact (service + entité) depuis une source web interne. */
-  enrich(nom: string, sourceId?: number | null): Observable<EnrichResult> {
-    return this.http.post<EnrichResult>('/api/enrich', { nom, sourceId: sourceId ?? null });
   }
 
   list(table: string): Observable<RefRow[]> {
@@ -72,7 +64,6 @@ export class RefsService {
       case 'roles':    this.roles.set(values as SimpleRef[]);    break;
       case 'etats':    this.etats.set(values as SimpleRef[]);    break;
       case 'domaines': this.domaines.set(values as SimpleRef[]); break;
-      case 'sources_web': this.sourcesWeb.set(values as SourceRef[]); break;
     }
   }
 }

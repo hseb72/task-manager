@@ -5,35 +5,14 @@ import { ActivatedRoute, RouterLink, RouterLinkActive } from '@angular/router';
 import { RefsService } from '../../services/refs.service';
 import {
   RefRow, ReferenceTableMeta,
-  SimpleRef, ServiceRef, ContactRef, SourceRef, SourceAuthType, RefKind, EnrichResult,
+  SimpleRef, ServiceRef, ContactRef, RefKind,
 } from '../../models/models';
-
-/** Copie de travail pour le panneau de configuration d'une source web. */
-interface SourceEdit {
-  id: number;
-  libelle: string;
-  rendu_js: boolean;
-  auth_type: SourceAuthType;
-  auth_user: string;
-  auth_header: string;
-  secret: string;
-  secretSet: boolean;
-  url_uid: string;
-  uid_regex: string;
-}
-
-/** État du panneau d'enrichissement d'un contact. */
-interface EnrichState {
-  contact: ContactRef;
-  loading: boolean;
-  result: EnrichResult | null;
-  error: string | null;
-}
+import { ContactEnrichDialogComponent } from '../../components/contact-enrich-dialog/contact-enrich-dialog.component';
 
 @Component({
   selector: 'app-refs-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive],
+  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive, ContactEnrichDialogComponent],
   templateUrl: './refs-page.component.html',
   styleUrl: './refs-page.component.css',
 })
@@ -53,15 +32,9 @@ export class RefsPageComponent implements OnInit {
   newContactEmail = signal('');
   newContactTelephone = signal('');
   newContactServiceId = signal<number | null>(null);
-  newSourceLibelle = signal('');
-  newSourceUrl = signal('');
 
-  // Enrichissement des contacts
-  enrichSourceId = signal<number | null>(null);
-  enrich = signal<EnrichState | null>(null);
-
-  // Configuration (rendu JS + authentification) d'une source web
-  sourceEdit = signal<SourceEdit | null>(null);
+  /** Contact en cours d'enrichissement par capture d'écran (ou null). */
+  enrichContact = signal<ContactRef | null>(null);
 
   meta = computed<ReferenceTableMeta | undefined>(() =>
     this.refs.tables().find(t => t.name === this.current())
@@ -73,10 +46,6 @@ export class RefsPageComponent implements OnInit {
   asSimple   = computed<SimpleRef[]>(()  => this.values() as SimpleRef[]);
   asServices = computed<ServiceRef[]>(() => this.values() as ServiceRef[]);
   asContacts = computed<ContactRef[]>(() => this.values() as ContactRef[]);
-  asSources  = computed<SourceRef[]>(()  => this.values() as SourceRef[]);
-
-  /** Sources web actives, proposées pour l'enrichissement. */
-  activeSources = computed<SourceRef[]>(() => this.refs.sourcesWeb().filter(s => s.actif));
 
   ngOnInit() {
     this.route.paramMap.subscribe(p => {
@@ -105,8 +74,6 @@ export class RefsPageComponent implements OnInit {
   private val(ev: Event): string {
     return (ev.target as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value;
   }
-  /** Version publique (utilisée par les liaisons de template). */
-  v(ev: Event): string { return this.val(ev); }
   private valOrNull(ev: Event): string | null {
     const v = this.val(ev);
     return v === '' ? null : v;
@@ -124,8 +91,6 @@ export class RefsPageComponent implements OnInit {
     this.newContactEmail.set('');
     this.newContactTelephone.set('');
     this.newContactServiceId.set(null);
-    this.newSourceLibelle.set('');
-    this.newSourceUrl.set('');
     this.errorMsg.set(null);
   }
 
@@ -146,11 +111,6 @@ export class RefsPageComponent implements OnInit {
       const lib = this.newServiceLibelle().trim();
       if (!lib) return;
       body = { libelle: lib, entite_id: this.newServiceEntiteId() };
-    } else if (k === 'source') {
-      const lib = this.newSourceLibelle().trim();
-      const url = this.newSourceUrl().trim();
-      if (!lib || !url) return;
-      body = { libelle: lib, url } as Partial<SourceRef>;
     } else { // contact
       const nom = this.newContactNom().trim();
       if (!nom) return;
@@ -216,85 +176,20 @@ export class RefsPageComponent implements OnInit {
     this.patch(v.id, { service_id: serviceId });
   }
 
-  // Source web
-  renameSource(v: SourceRef, ev: Event) {
-    const newLib = this.val(ev).trim();
-    if (!newLib || newLib === v.libelle) return;
-    this.patch(v.id, { libelle: newLib } as Partial<SourceRef>);
-  }
-  changeSourceUrl(v: SourceRef, ev: Event) {
-    const url = this.val(ev).trim();
-    if (!url || url === v.url) return;
-    this.patch(v.id, { url } as Partial<SourceRef>);
-  }
-  toggleRenduJs(v: SourceRef) {
-    this.patch(v.id, { rendu_js: v.rendu_js ? 0 : 1 } as Partial<SourceRef>);
-  }
-
-  // Panneau de configuration (rendu JS + auth)
-  openSourceConfig(v: SourceRef) {
-    this.sourceEdit.set({
-      id: v.id,
-      libelle: v.libelle,
-      rendu_js: !!v.rendu_js,
-      auth_type: (v.auth_type ?? 'none'),
-      auth_user: v.auth_user ?? '',
-      auth_header: v.auth_header ?? '',
-      secret: '',
-      secretSet: !!v.auth_secret_set,
-      url_uid: v.url_uid ?? '',
-      uid_regex: v.uid_regex ?? '',
-    });
-  }
-  updateSourceEdit(patch: Partial<SourceEdit>) {
-    const e = this.sourceEdit();
-    if (e) this.sourceEdit.set({ ...e, ...patch });
-  }
-  saveSourceConfig() {
-    const e = this.sourceEdit();
-    if (!e) return;
-    const body: Partial<SourceRef> = {
-      rendu_js: e.rendu_js ? 1 : 0,
-      auth_type: e.auth_type,
-      auth_user: e.auth_type === 'basic' ? (e.auth_user.trim() || null) : null,
-      auth_header: e.auth_type === 'header' ? (e.auth_header.trim() || null) : null,
-      url_uid: e.url_uid.trim() || null,
-      uid_regex: e.uid_regex.trim() || null,
-    };
-    // Le secret n'est envoyé que s'il a été saisi (sinon inchangé côté serveur).
-    if (e.secret) body.auth_secret = e.secret;
-    this.patch(e.id, body);
-    this.sourceEdit.set(null);
-  }
-  closeSourceConfig() { this.sourceEdit.set(null); }
-
   /* ====================================================================== */
-  /*  Enrichissement d'un contact depuis une source web                      */
+  /*  Enrichissement d'un contact par capture d'écran (OCR)                  */
   /* ====================================================================== */
 
   openEnrich(v: ContactRef) {
-    // Source par défaut : celle sélectionnée, sinon la première active
-    if (this.enrichSourceId() == null && this.activeSources().length > 0) {
-      this.enrichSourceId.set(this.activeSources()[0]!.id);
+    this.enrichContact.set(v);
+  }
+  onEnrichClosed(res: { serviceId?: number }) {
+    const contact = this.enrichContact();
+    this.enrichContact.set(null);
+    if (contact && res.serviceId != null) {
+      this.patch(contact.id, { service_id: res.serviceId } as Partial<ContactRef>);
     }
-    this.enrich.set({ contact: v, loading: true, result: null, error: null });
-    this.refs.enrich(v.nom, this.enrichSourceId()).subscribe({
-      next: r => this.enrich.set({ contact: v, loading: false, result: r, error: null }),
-      error: err => this.enrich.set({
-        contact: v, loading: false, result: null,
-        error: err?.error?.error ?? err.message ?? 'Erreur',
-      }),
-    });
   }
-
-  applyEnrich() {
-    const st = this.enrich();
-    if (!st?.result?.serviceMatch) return;
-    this.patch(st.contact.id, { service_id: st.result.serviceMatch.id });
-    this.enrich.set(null);
-  }
-
-  closeEnrich() { this.enrich.set(null); }
 
   // Commun
   toggleActif(v: RefRow) {
@@ -321,8 +216,6 @@ export class RefsPageComponent implements OnInit {
       case 'contactEmail':        this.newContactEmail.set(v); break;
       case 'contactTelephone':    this.newContactTelephone.set(v); break;
       case 'contactService':      this.newContactServiceId.set(v === '' ? null : Number(v)); break;
-      case 'sourceLibelle':       this.newSourceLibelle.set(v); break;
-      case 'sourceUrl':           this.newSourceUrl.set(v); break;
     }
   }
 
