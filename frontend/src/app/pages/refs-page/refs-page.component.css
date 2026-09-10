@@ -81,3 +81,18 @@
   border-top: 1px solid var(--line-soft);
   font-size: 0.82rem;
 }
+
+/* Ligne de filtres par colonne (sous les en-têtes) */
+.data-table tr.filter-row th {
+  padding: 0.2rem 0.4rem 0.45rem;
+  font-weight: normal;
+  background: var(--bg-alt);
+  border-bottom: 1px solid var(--line);
+}
+.data-table tr.filter-row .cell-input,
+.data-table tr.filter-row .cell-select {
+  width: 100%;
+  min-width: 60px;
+  font-size: 0.76rem;
+  padding: 0.15rem 0.3rem;
+}

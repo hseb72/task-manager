@@ -92,6 +92,11 @@ function listConfig(table) {
         id: 's.id', libelle: 's.libelle COLLATE NOCASE',
         entite_libelle: 'e.libelle COLLATE NOCASE', actif: 's.actif',
       },
+      filterMap: {
+        libelle:   { col: 's.libelle', type: 'text' },
+        entite_id: { col: 's.entite_id', type: 'eq' },
+        actif:     { col: 's.actif', type: 'eq' },
+      },
       defaultSort: 's.libelle COLLATE NOCASE', pk: 's.id',
     };
   }
@@ -108,6 +113,15 @@ function listConfig(table) {
         fonction: 'c.fonction COLLATE NOCASE', email: 'c.email COLLATE NOCASE',
         telephone: 'c.telephone COLLATE NOCASE', actif: 'c.actif',
       },
+      filterMap: {
+        nom:        { col: 'c.nom', type: 'text' },
+        service_id: { col: 'c.service_id', type: 'eq' },
+        entite_id:  { col: 's.entite_id', type: 'eq' },
+        fonction:   { col: 'c.fonction', type: 'text' },
+        email:      { col: 'c.email', type: 'text' },
+        telephone:  { col: 'c.telephone', type: 'text' },
+        actif:      { col: 'c.actif', type: 'eq' },
+      },
       defaultSort: 'c.nom COLLATE NOCASE', pk: 'c.id',
     };
   }
@@ -117,6 +131,10 @@ function listConfig(table) {
     cols: '*',
     searchCols: ['libelle'],
     sortMap: { id: 'id', libelle: 'libelle COLLATE NOCASE', actif: 'actif' },
+    filterMap: {
+      libelle: { col: 'libelle', type: 'text' },
+      actif:   { col: 'actif', type: 'eq' },
+    },
     defaultSort: 'libelle COLLATE NOCASE', pk: 'id',
   };
 }
@@ -145,14 +163,30 @@ router.get('/:table', ensureTable, async (req, res, next) => {
 
     const cfg = listConfig(table);
 
-    // Recherche (LIKE sur les colonnes texte)
-    const term = String(q.q ?? '').trim();
-    let where = '';
+    // WHERE = recherche globale (q) + filtres par colonne (f_<clé>), combinés en AND.
+    const clauses = [];
     const whereArgs = [];
+
+    const term = String(q.q ?? '').trim();
     if (term) {
-      where = 'WHERE (' + cfg.searchCols.map(c => `${c} LIKE ?`).join(' OR ') + ')';
+      clauses.push('(' + cfg.searchCols.map(c => `${c} LIKE ?`).join(' OR ') + ')');
       for (const _ of cfg.searchCols) whereArgs.push('%' + term + '%');
     }
+
+    for (const [key, def] of Object.entries(cfg.filterMap)) {
+      const raw = q['f_' + key];
+      if (raw === undefined || raw === '') continue;
+      if (def.type === 'text') {
+        clauses.push(`${def.col} LIKE ?`);
+        whereArgs.push('%' + String(raw) + '%');
+      } else { // eq
+        clauses.push(`${def.col} = ?`);
+        const n = Number(raw);
+        whereArgs.push(Number.isFinite(n) && String(n) === String(raw) ? n : String(raw));
+      }
+    }
+
+    const where = clauses.length ? 'WHERE ' + clauses.join(' AND ') : '';
 
     // Tri (liste blanche) + direction
     const sortExpr = cfg.sortMap[String(q.sort ?? '')] ?? cfg.defaultSort;

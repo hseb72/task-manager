@@ -56,8 +56,11 @@ export class RefsPageComponent implements OnInit {
   pageSize = signal<number>(25);
   pageIndex = signal<number>(0);
   search   = signal<string>('');
+  /** Filtres par colonne : { clé → valeur }. */
+  filters  = signal<Record<string, string>>({});
   readonly pageSizes = [10, 25, 50, 100];
   private searchTimer: any = null;
+  private filterTimer: any = null;
 
   pageCount = computed(() => Math.max(1, Math.ceil(this.total() / this.pageSize())));
   rangeStart = computed(() => this.total() === 0 ? 0 : this.pageIndex() * this.pageSize() + 1);
@@ -77,6 +80,7 @@ export class RefsPageComponent implements OnInit {
       this.sortDir.set('asc');
       this.pageIndex.set(0);
       this.search.set('');
+      this.filters.set({});
       this.fetch();
     });
   }
@@ -106,6 +110,35 @@ export class RefsPageComponent implements OnInit {
     this.searchTimer = setTimeout(() => this.fetch(), 250);   // anti-rebond
   }
 
+  /* ----- Filtres par colonne ----- */
+  filterVal(key: string): string { return this.filters()[key] ?? ''; }
+  private applyFilter(key: string, value: string) {
+    const f = { ...this.filters() };
+    if (value === '' || value == null) delete f[key]; else f[key] = value;
+    this.filters.set(f);
+    this.pageIndex.set(0);
+  }
+  /** Filtre texte (contient) : anti-rebond. */
+  onFilterText(key: string, ev: Event) {
+    this.applyFilter(key, this.val(ev));
+    clearTimeout(this.filterTimer);
+    this.filterTimer = setTimeout(() => this.fetch(), 250);
+  }
+  /** Filtre par égalité (listes déroulantes) : immédiat. */
+  onFilterEq(key: string, ev: Event) {
+    this.applyFilter(key, this.val(ev));
+    this.fetch();
+  }
+  hasFilters(): boolean {
+    return this.search().trim() !== '' || Object.keys(this.filters()).length > 0;
+  }
+  resetFilters() {
+    this.search.set('');
+    this.filters.set({});
+    this.pageIndex.set(0);
+    this.fetch();
+  }
+
   /** Récupère la page courante depuis le serveur. */
   fetch() {
     this.errorMsg.set(null);
@@ -115,6 +148,7 @@ export class RefsPageComponent implements OnInit {
       sort: this.sortKey(),
       dir: this.sortDir(),
       q: this.search(),
+      filters: this.filters(),
     }).subscribe({
       next: res => {
         this.rows.set(res.rows);

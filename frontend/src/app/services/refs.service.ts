@@ -21,6 +21,8 @@ export interface ListQuery {
   sort?: string | null;
   dir?: 'asc' | 'desc';
   q?: string;
+  /** Filtres par colonne : { clé → valeur } envoyés en `f_<clé>`. */
+  filters?: Record<string, string>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -76,6 +78,9 @@ export class RefsService {
       .set('pageSize', String(opts.pageSize));
     if (opts.sort) params = params.set('sort', opts.sort).set('dir', opts.dir ?? 'asc');
     if (opts.q && opts.q.trim()) params = params.set('q', opts.q.trim());
+    for (const [k, v] of Object.entries(opts.filters ?? {})) {
+      if (v !== '' && v != null) params = params.set('f_' + k, v);
+    }
     return this.http.get<PagedResult>(`${this.base}/${table}`, { params });
   }
   create(table: string, body: Partial<RefRow>): Observable<RefRow> {

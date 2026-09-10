@@ -94,15 +94,16 @@
         </div>
       }
 
-      <!-- Recherche (côté serveur) -->
+      <!-- Recherche globale (côté serveur) -->
       <div class="row gap-sm mb-2">
         <input type="search" placeholder="Rechercher…"
                [value]="search()" (input)="onSearch($event)"
                style="max-width: 320px">
-        @if (search()) {
-          <span class="muted" style="font-size: 0.8rem; align-self: center">
-            {{ total() }} résultat(s)
-          </span>
+        @if (hasFilters()) {
+          <button class="btn tight" (click)="resetFilters()" title="Réinitialiser recherche et filtres">
+            ⟲ Réinitialiser
+          </button>
+          <span class="muted" style="font-size: 0.8rem; align-self: center">{{ total() }} résultat(s)</span>
         }
       </div>
 
@@ -124,6 +125,17 @@
                   <th class="sortable" (click)="toggleSort('libelle')">Libellé{{ sortArrow('libelle') }}</th>
                   <th style="width: 120px" class="sortable" (click)="toggleSort('actif')">État{{ sortArrow('actif') }}</th>
                   <th style="width: 80px"></th>
+                </tr>
+                <tr class="filter-row">
+                  <th></th>
+                  <th><input type="search" class="cell-input" placeholder="filtrer…"
+                             [value]="filterVal('libelle')" (input)="onFilterText('libelle', $event)"></th>
+                  <th>
+                    <select class="cell-select" [value]="filterVal('actif')" (change)="onFilterEq('actif', $event)">
+                      <option value="">Tous</option><option value="1">Actif</option><option value="0">Inactif</option>
+                    </select>
+                  </th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -156,6 +168,24 @@
                   <th style="width: 120px" class="sortable" (click)="toggleSort('actif')">État{{ sortArrow('actif') }}</th>
                   <th style="width: 110px"></th>
                   <th style="width: 80px"></th>
+                </tr>
+                <tr class="filter-row">
+                  <th></th>
+                  <th><input type="search" class="cell-input" placeholder="filtrer…"
+                             [value]="filterVal('libelle')" (input)="onFilterText('libelle', $event)"></th>
+                  <th>
+                    <select class="cell-select" [value]="filterVal('entite_id')" (change)="onFilterEq('entite_id', $event)">
+                      <option value="">Toutes</option>
+                      @for (e of refs.entites(); track e.id) { <option [value]="e.id">{{ e.libelle }}</option> }
+                    </select>
+                  </th>
+                  <th>
+                    <select class="cell-select" [value]="filterVal('actif')" (change)="onFilterEq('actif', $event)">
+                      <option value="">Tous</option><option value="1">Actif</option><option value="0">Inactif</option>
+                    </select>
+                  </th>
+                  <th></th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -208,6 +238,36 @@
                   <th style="width: 100px" class="sortable" (click)="toggleSort('actif')">État{{ sortArrow('actif') }}</th>
                   <th style="width: 90px"></th>
                   <th style="width: 60px"></th>
+                </tr>
+                <tr class="filter-row">
+                  <th></th>
+                  <th><input type="search" class="cell-input" placeholder="filtrer…"
+                             [value]="filterVal('nom')" (input)="onFilterText('nom', $event)"></th>
+                  <th>
+                    <select class="cell-select" [value]="filterVal('service_id')" (change)="onFilterEq('service_id', $event)">
+                      <option value="">Tous</option>
+                      @for (s of refs.services(); track s.id) { <option [value]="s.id">{{ s.libelle }}</option> }
+                    </select>
+                  </th>
+                  <th>
+                    <select class="cell-select" [value]="filterVal('entite_id')" (change)="onFilterEq('entite_id', $event)">
+                      <option value="">Toutes</option>
+                      @for (e of refs.entites(); track e.id) { <option [value]="e.id">{{ e.libelle }}</option> }
+                    </select>
+                  </th>
+                  <th><input type="search" class="cell-input" placeholder="filtrer…"
+                             [value]="filterVal('fonction')" (input)="onFilterText('fonction', $event)"></th>
+                  <th><input type="search" class="cell-input" placeholder="filtrer…"
+                             [value]="filterVal('email')" (input)="onFilterText('email', $event)"></th>
+                  <th><input type="search" class="cell-input" placeholder="filtrer…"
+                             [value]="filterVal('telephone')" (input)="onFilterText('telephone', $event)"></th>
+                  <th>
+                    <select class="cell-select" [value]="filterVal('actif')" (change)="onFilterEq('actif', $event)">
+                      <option value="">Tous</option><option value="1">Actif</option><option value="0">Inactif</option>
+                    </select>
+                  </th>
+                  <th></th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
