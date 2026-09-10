@@ -4,6 +4,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { firstValueFrom } from 'rxjs';
 import { OcrService } from '../../services/ocr.service';
 import { RefsService } from '../../services/refs.service';
 import { ContactRef, ServiceRef, SimpleRef } from '../../models/models';
@@ -260,8 +261,28 @@ export class ContactEnrichDialogComponent {
     return s?.entite_libelle ?? ent?.libelle ?? this.entiteMatch()?.libelle ?? null;
   }
 
-  apply() {
-    this.closed.emit({ serviceId: this.serviceId() ?? undefined });
+  /** Sélection d'un service : on reflète son entité actuelle (si définie). */
+  onSelectService(id: number | null) {
+    this.serviceId.set(id);
+    const svc = this.refs.services().find(s => s.id === id);
+    if (svc && svc.entite_id != null) this.entiteId.set(svc.entite_id);
+  }
+
+  async apply() {
+    const sid = this.serviceId();
+    const eid = this.entiteId();
+    // Intègre l'association service ↔ entité : si le service retenu n'est pas
+    // (ou pas correctement) rattaché à l'entité choisie, on met à jour le service.
+    if (sid != null && eid != null) {
+      const svc = this.refs.services().find(s => s.id === sid);
+      if (svc && svc.entite_id !== eid) {
+        try {
+          await firstValueFrom(this.refs.update('services', sid, { entite_id: eid } as any));
+          await firstValueFrom(this.refs.loadAll());
+        } catch { /* on applique quand même le rattachement du contact */ }
+      }
+    }
+    this.closed.emit({ serviceId: sid ?? undefined });
   }
   reset() {
     this.step.set('upload');

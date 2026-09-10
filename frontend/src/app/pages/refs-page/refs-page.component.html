@@ -105,9 +105,9 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width: 60px">ID</th>
-                  <th>Libellé</th>
-                  <th style="width: 120px">État</th>
+                  <th style="width: 60px" class="sortable" (click)="toggleSort('id')">ID{{ sortArrow('id') }}</th>
+                  <th class="sortable" (click)="toggleSort('libelle')">Libellé{{ sortArrow('libelle') }}</th>
+                  <th style="width: 120px" class="sortable" (click)="toggleSort('actif')">État{{ sortArrow('actif') }}</th>
                   <th style="width: 80px"></th>
                 </tr>
               </thead>
@@ -135,10 +135,10 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width: 60px">ID</th>
-                  <th>Libellé</th>
-                  <th style="min-width: 180px">Entité</th>
-                  <th style="width: 120px">État</th>
+                  <th style="width: 60px" class="sortable" (click)="toggleSort('id')">ID{{ sortArrow('id') }}</th>
+                  <th class="sortable" (click)="toggleSort('libelle')">Libellé{{ sortArrow('libelle') }}</th>
+                  <th style="min-width: 180px" class="sortable" (click)="toggleSort('entite_libelle')">Entité{{ sortArrow('entite_libelle') }}</th>
+                  <th style="width: 120px" class="sortable" (click)="toggleSort('actif')">État{{ sortArrow('actif') }}</th>
                   <th style="width: 110px"></th>
                   <th style="width: 80px"></th>
                 </tr>
@@ -183,14 +183,14 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width: 60px">ID</th>
-                  <th style="min-width: 160px">Nom</th>
-                  <th style="min-width: 180px">Service</th>
-                  <th>Entité</th>
-                  <th style="min-width: 140px">Fonction</th>
-                  <th>Email</th>
-                  <th>Téléphone</th>
-                  <th style="width: 100px">État</th>
+                  <th style="width: 60px" class="sortable" (click)="toggleSort('id')">ID{{ sortArrow('id') }}</th>
+                  <th style="min-width: 160px" class="sortable" (click)="toggleSort('nom')">Nom{{ sortArrow('nom') }}</th>
+                  <th style="min-width: 180px" class="sortable" (click)="toggleSort('service_libelle')">Service{{ sortArrow('service_libelle') }}</th>
+                  <th class="sortable" (click)="toggleSort('entite_libelle')">Entité{{ sortArrow('entite_libelle') }}</th>
+                  <th style="min-width: 140px" class="sortable" (click)="toggleSort('fonction')">Fonction{{ sortArrow('fonction') }}</th>
+                  <th class="sortable" (click)="toggleSort('email')">Email{{ sortArrow('email') }}</th>
+                  <th class="sortable" (click)="toggleSort('telephone')">Téléphone{{ sortArrow('telephone') }}</th>
+                  <th style="width: 100px" class="sortable" (click)="toggleSort('actif')">État{{ sortArrow('actif') }}</th>
                   <th style="width: 90px"></th>
                   <th style="width: 60px"></th>
                 </tr>
@@ -247,6 +247,25 @@
             </table>
           }
         }
+
+        <!-- Pagination -->
+        <div class="pager">
+          <label class="row gap-sm" style="margin: 0">
+            <span class="muted">Afficher</span>
+            <select [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)"
+                    style="border: 1px solid var(--line)">
+              @for (n of pageSizes; track n) {
+                <option [ngValue]="n">{{ n === 0 ? 'Tout' : n }}</option>
+              }
+            </select>
+          </label>
+          <span class="muted">{{ rangeStart() }}–{{ rangeEnd() }} sur {{ sorted().length }}</span>
+          <span class="row gap-sm" style="margin-left: auto">
+            <button class="btn tight" (click)="prevPage()" [disabled]="pageIndex() === 0">‹ Précédent</button>
+            <span class="muted">Page {{ pageIndex() + 1 }} / {{ pageCount() }}</span>
+            <button class="btn tight" (click)="nextPage()" [disabled]="pageIndex() >= pageCount() - 1">Suivant ›</button>
+          </span>
+        </div>
       }
     </div>
   </section>

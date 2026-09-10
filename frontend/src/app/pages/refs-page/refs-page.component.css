@@ -60,3 +60,24 @@
   .refs-layout { grid-template-columns: 1fr; }
   .refs-side { position: static; }
 }
+
+/* ==========================================================================
+   Tri (en-têtes cliquables) & pagination
+   ========================================================================== */
+.data-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.data-table th.sortable:hover { color: var(--accent); }
+
+.pager {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line-soft);
+  font-size: 0.82rem;
+}

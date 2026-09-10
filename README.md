@@ -170,6 +170,7 @@ Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
 ### b) Page `Référentiels`
 - Menu latéral pour basculer entre les référentiels.
 - Ajout, renommage, désactivation (actif/inactif) et suppression des valeurs.
+- Tableaux **triables** (clic sur un en-tête, indicateur ↑/↓) et **paginés** (10 / 25 / 50 / Tout, navigation ‹ Précédent / Suivant ›, libellé « X–Y sur Z »).
 - Les valeurs renommées se propagent immédiatement aux listes déroulantes de la page principale.
 - **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Colonne **Fonction** (éditable, nullable). Bouton **🔎 Enrichir** par contact : on dépose la **capture de la fiche annuaire** ; le **service** et l'**entité (métier)** sont déduits, rapprochés des référentiels, et **créables à la volée** si absents, puis appliqués (`service_id`, l'entité en découlant).
 - **Services** : bouton **🔎 Enrichir** par service : on dépose une **capture des tuiles de contacts** ; nom et rôle (→ **fonction**) sont extraits par tuile (id et interne/externe ignorés) et, après validation (créer / lier / ignorer), les contacts sont **rattachés au service**. Tout se passe dans le navigateur — aucun accès réseau à l'annuaire.

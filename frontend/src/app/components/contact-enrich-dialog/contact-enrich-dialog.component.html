@@ -84,7 +84,7 @@
             <!-- Service : sélection ou création à la volée -->
             <label class="mt-2">Rattacher au service</label>
             <div class="row gap-sm">
-              <select [ngModel]="serviceId()" (ngModelChange)="serviceId.set($event)" style="flex: 1">
+              <select [ngModel]="serviceId()" (ngModelChange)="onSelectService($event)" style="flex: 1">
                 <option [ngValue]="null">— aucun —</option>
                 @for (s of refs.services(); track s.id) {
                   <option [ngValue]="s.id">{{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }</option>

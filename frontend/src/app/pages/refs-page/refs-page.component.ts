@@ -47,19 +47,78 @@ export class RefsPageComponent implements OnInit {
   kind = computed<RefKind>(() => this.meta()?.kind ?? 'simple');
   currentLabel = computed(() => this.meta()?.label ?? this.current());
 
-  // Vues typées du tableau (selon le kind)
-  asSimple   = computed<SimpleRef[]>(()  => this.values() as SimpleRef[]);
-  asServices = computed<ServiceRef[]>(() => this.values() as ServiceRef[]);
-  asContacts = computed<ContactRef[]>(() => this.values() as ContactRef[]);
+  /* ----- Tri & pagination ----- */
+  sortKey  = signal<string | null>(null);
+  sortDir  = signal<'asc' | 'desc'>('asc');
+  pageSize = signal<number>(10);        // 0 = tout afficher
+  pageIndex = signal<number>(0);
+  readonly pageSizes = [10, 25, 50, 0];
+
+  /** Valeurs triées selon la colonne active. */
+  sorted = computed<RefRow[]>(() => {
+    const rows = [...this.values()];
+    const key = this.sortKey();
+    if (!key) return rows;
+    const dir = this.sortDir() === 'asc' ? 1 : -1;
+    return rows.sort((a, b) => {
+      const va = (a as any)[key];
+      const vb = (b as any)[key];
+      if (va == null && vb == null) return 0;
+      if (va == null) return 1;        // valeurs vides en dernier
+      if (vb == null) return -1;
+      if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), 'fr', { numeric: true, sensitivity: 'base' }) * dir;
+    });
+  });
+
+  pageCount = computed(() => {
+    const ps = this.pageSize();
+    return ps <= 0 ? 1 : Math.max(1, Math.ceil(this.sorted().length / ps));
+  });
+  /** Lignes de la page courante (après tri + pagination). */
+  paged = computed<RefRow[]>(() => {
+    const ps = this.pageSize();
+    if (ps <= 0) return this.sorted();
+    const i = Math.min(this.pageIndex(), this.pageCount() - 1);
+    return this.sorted().slice(i * ps, i * ps + ps);
+  });
+  rangeStart = computed(() => this.sorted().length === 0 ? 0 : (this.pageSize() <= 0 ? 1 : this.pageIndex() * this.pageSize() + 1));
+  rangeEnd   = computed(() => this.pageSize() <= 0 ? this.sorted().length : Math.min(this.sorted().length, (this.pageIndex() + 1) * this.pageSize()));
+
+  // Vues typées de la PAGE courante (selon le kind)
+  asSimple   = computed<SimpleRef[]>(()  => this.paged() as SimpleRef[]);
+  asServices = computed<ServiceRef[]>(() => this.paged() as ServiceRef[]);
+  asContacts = computed<ContactRef[]>(() => this.paged() as ContactRef[]);
 
   ngOnInit() {
     this.route.paramMap.subscribe(p => {
       const tbl = p.get('table') ?? 'entites';
       this.current.set(tbl);
       this.resetForm();
+      this.sortKey.set(null);          // colonnes différentes selon le référentiel
+      this.sortDir.set('asc');
+      this.pageIndex.set(0);
       this.load();
     });
   }
+
+  /* ----- Tri & pagination : commandes ----- */
+  toggleSort(key: string) {
+    if (this.sortKey() === key) {
+      this.sortDir.set(this.sortDir() === 'asc' ? 'desc' : 'asc');
+    } else {
+      this.sortKey.set(key);
+      this.sortDir.set('asc');
+    }
+    this.pageIndex.set(0);
+  }
+  sortArrow(key: string): string {
+    if (this.sortKey() !== key) return '';
+    return this.sortDir() === 'asc' ? ' ↑' : ' ↓';
+  }
+  setPageSize(n: number) { this.pageSize.set(n); this.pageIndex.set(0); }
+  prevPage() { if (this.pageIndex() > 0) this.pageIndex.update(i => i - 1); }
+  nextPage() { if (this.pageIndex() < this.pageCount() - 1) this.pageIndex.update(i => i + 1); }
 
   load() {
     this.errorMsg.set(null);
@@ -67,6 +126,8 @@ export class RefsPageComponent implements OnInit {
       next: vs => {
         this.values.set(vs);
         this.refs.refreshSignal(this.current(), vs);
+        // Reste dans les bornes après ajout/suppression.
+        this.pageIndex.set(Math.min(this.pageIndex(), this.pageCount() - 1));
       },
       error: err => this.errorMsg.set(err?.error?.error ?? err.message ?? 'Erreur'),
     });
