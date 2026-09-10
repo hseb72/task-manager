@@ -99,6 +99,12 @@ async function runMigrations() {
     console.log('↻ Migration : table sources_web supprimée (obsolète)');
   }
 
+  // 2c. Migration de contacts : ajout de la fonction organisationnelle (nullable).
+  if (await tableExists('contacts') && !await columnExists('contacts', 'fonction')) {
+    await db.execute('ALTER TABLE contacts ADD COLUMN fonction TEXT');
+    console.log('↻ Migration : contacts.fonction ajouté');
+  }
+
   // 3. Migration de tache_contacts : ajout de role_id
   if (await tableExists('tache_contacts') && !await columnExists('tache_contacts', 'role_id')) {
     await db.execute(`ALTER TABLE tache_contacts ADD COLUMN role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL`);
@@ -162,7 +168,7 @@ export async function initDatabase() {
     )
   `);
 
-  // ----- Contacts (sans 'role') -----
+  // ----- Contacts (sans 'role' ; 'fonction' = fonction organisationnelle) -----
   await db.execute(`
     CREATE TABLE IF NOT EXISTS contacts (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,7 +176,8 @@ export async function initDatabase() {
       email      TEXT,
       telephone  TEXT,
       actif      INTEGER NOT NULL DEFAULT 1,
-      service_id INTEGER REFERENCES services(id) ON DELETE SET NULL
+      service_id INTEGER REFERENCES services(id) ON DELETE SET NULL,
+      fonction   TEXT
     )
   `);
 

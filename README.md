@@ -79,13 +79,16 @@ Les bases existantes sont migrées automatiquement au démarrage :
 #### Référentiels
 - `GET    /api/refs` — liste les référentiels disponibles
 - `GET    /api/refs/:table` — toutes les valeurs (`entites`, `services`, `contacts`, `roles`, `etats`, `domaines`)
-- `POST   /api/refs/:table` — `{ libelle, actif? }` (contacts : `{ nom, … }`)
-  - **Contacts** : la création est refusée (409) si un contact du **même nom** existe déjà (à la casse et aux espaces près).
+- `POST   /api/refs/:table` — `{ libelle, actif? }` (contacts : `{ nom, email?, telephone?, service_id?, fonction? }`)
+  - **Contacts** : la création est refusée (409) si un contact du **même nom** existe déjà (à la casse et aux espaces près). Le champ **`fonction`** (intitulé de poste / fonction organisationnelle) est optionnel et nullable.
 - `PUT    /api/refs/:table/:id`
 - `DELETE /api/refs/:table/:id`
 
-#### Enrichissement de contact (capture d'écran, côté navigateur)
-L'enrichissement d'un contact (déduction du **service** et de l'**entité** de rattachement) se fait **entièrement côté frontend**, à partir d'une **capture d'écran de la fiche annuaire** que l'utilisateur dépose : le texte est reconnu localement (Tesseract.js, déjà utilisé par l'import OCR), les libellés « Service / Département… » et « Entité / Direction / Société… » sont extraits puis rapprochés des référentiels (sans tenir compte de la casse ni des accents). Le rattachement validé met à jour `contacts.service_id` (l'entité en découle). Aucun appel réseau vers l'annuaire, donc aucune contrainte de CORS, d'authentification serveur ou de certificat.
+#### Enrichissement par capture d'écran (côté navigateur)
+Deux enrichissements par **capture d'écran**, entièrement côté frontend (OCR local via Tesseract.js, aucun appel réseau vers l'annuaire — donc pas de contrainte CORS, d'authentification serveur ni de certificat) :
+
+- **Contact** (page Référentiels → Contacts, bouton 🔎) : on dépose la **fiche annuaire** du contact ; le **service** (libellé « Unité d'affectation principale / Service / Département… ») et l'**entité** (« Métier / Entité / Direction… », en ignorant « Entité juridique ») sont lus — y compris quand la valeur est sur la ligne **sous** le libellé — puis rapprochés des référentiels (insensible casse/accents). Si le service ou l'entité n'existent pas, ils sont **créables à la volée**. Le rattachement validé met à jour `contacts.service_id` (l'entité en découle).
+- **Service** (page Référentiels → Services, bouton 🔎) : on dépose une capture des **tuiles de contacts** du service. Pour chaque tuile, le **nom** et le **rôle** (texte après le tiret, stocké en **`fonction`**) sont extraits ; la photo/les initiales, l'id et la mention *interne/externe* sont ignorés. L'utilisateur valide la liste (créer / lier à un existant / ignorer) ; chaque contact gardé est **rattaché au service** (`service_id`) et sa fonction renseignée. Les doublons de nom sont réutilisés.
 
 #### Divers
 - `GET /api/health` — sonde de vie
@@ -168,7 +171,8 @@ Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
 - Menu latéral pour basculer entre les référentiels.
 - Ajout, renommage, désactivation (actif/inactif) et suppression des valeurs.
 - Les valeurs renommées se propagent immédiatement aux listes déroulantes de la page principale.
-- **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Chaque ligne dispose d'un bouton **🔎 Enrichir** : on y dépose (ou colle) une **capture d'écran de la fiche annuaire** du contact, le texte est reconnu localement et le **service** + l'**entité (métier)** de rattachement sont déduits et rapprochés des référentiels, puis proposés à l'application (met à jour `service_id`, l'entité en découlant). Tout se passe dans le navigateur — aucun accès réseau à l'annuaire.
+- **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Colonne **Fonction** (éditable, nullable). Bouton **🔎 Enrichir** par contact : on dépose la **capture de la fiche annuaire** ; le **service** et l'**entité (métier)** sont déduits, rapprochés des référentiels, et **créables à la volée** si absents, puis appliqués (`service_id`, l'entité en découlant).
+- **Services** : bouton **🔎 Enrichir** par service : on dépose une **capture des tuiles de contacts** ; nom et rôle (→ **fonction**) sont extraits par tuile (id et interne/externe ignorés) et, après validation (créer / lier / ignorer), les contacts sont **rattachés au service**. Tout se passe dans le navigateur — aucun accès réseau à l'annuaire.
 
 ---
 

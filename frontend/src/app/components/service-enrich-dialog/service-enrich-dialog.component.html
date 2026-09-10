@@ -1,0 +1,148 @@
+<div class="modal-backdrop" (click)="cancel()">
+  <div class="modal" (click)="$event.stopPropagation()" style="max-width: 860px">
+    <div class="modal-head">
+      <div>
+        <h2>Ajouter des contacts au service « {{ service.libelle }} »</h2>
+        <div class="muted" style="font-size: 0.82rem; margin-top: 0.2rem">
+          @switch (step()) {
+            @case ('upload')    { Déposez/collez une capture des tuiles de contacts (photo/initiales, nom, id – rôle, interne/externe). }
+            @case ('analyzing') { Lecture de la capture en cours… }
+            @case ('review')    { Vérifiez la liste ; chaque contact gardé sera rattaché à ce service. }
+            @case ('saving')    { Enregistrement… }
+            @case ('done')      { {{ addedCount() }} contact(s) rattaché(s) à « {{ service.libelle }} ». }
+            @case ('error')     { Une erreur s'est produite. }
+          }
+        </div>
+      </div>
+      <button class="icon-btn" (click)="cancel()">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- UPLOAD -->
+      @if (step() === 'upload') {
+        <div class="drop-zone" (drop)="onImageDrop($event)" (dragover)="onDragOver($event)">
+          <div class="drop-icon">👥</div>
+          <div class="drop-text">
+            Glissez la capture des tuiles ici, ou collez-la avec <kbd>Ctrl</kbd>+<kbd>V</kbd>
+          </div>
+          <label class="btn primary" style="display: inline-block">
+            <input type="file" accept="image/*" style="display: none" (change)="onFileSelected($event)">
+            …ou sélectionner une image
+          </label>
+          <div class="muted mt-2" style="font-size: 0.78rem">
+            Pour chaque tuile : le <strong>nom</strong> et le <strong>rôle</strong> (après le tiret) sont retenus ;
+            l'id et la mention interne/externe sont ignorés.
+          </div>
+        </div>
+      }
+
+      <!-- ANALYZING -->
+      @if (step() === 'analyzing') {
+        <div style="text-align: center; padding: 2rem">
+          @if (imagePreview(); as img) {
+            <img [src]="img" alt="aperçu" style="max-height: 220px; margin-bottom: 1.2rem; border: 1px solid var(--line); border-radius: var(--radius)">
+          }
+          <div class="progress-bar"><div class="progress-fill" [style.width.%]="ocrProgress()"></div></div>
+          <div class="muted mt-1">{{ ocrStatus() }} ({{ ocrProgress() }}%)</div>
+        </div>
+      }
+
+      <!-- REVIEW -->
+      @if (step() === 'review') {
+        @if (decisions().length === 0) {
+          <div class="empty-state">Aucun contact détecté dans la capture. Réessayez avec une image plus nette.</div>
+        } @else {
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th style="min-width: 180px">Fonction (rôle détecté)</th>
+                <th style="min-width: 240px">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (d of decisions(); track $index; let i = $index) {
+                <tr [class.skipped]="d.mode === 'skip'">
+                  <td>
+                    <input class="cell-input" [value]="d.nom" (input)="setField(i, 'nom', v($event))">
+                  </td>
+                  <td>
+                    <input class="cell-input" [value]="d.fonction" (input)="setField(i, 'fonction', v($event))"
+                           placeholder="—">
+                  </td>
+                  <td>
+                    <div class="row gap-sm" style="flex-wrap: wrap">
+                      <label class="row gap-sm" style="margin-bottom: 0">
+                        <input type="radio" [name]="'m' + i" [checked]="d.mode === 'create'" (change)="setMode(i, 'create')">
+                        <span>Créer</span>
+                      </label>
+                      <label class="row gap-sm" style="margin-bottom: 0">
+                        <input type="radio" [name]="'m' + i" [checked]="d.mode === 'link'" (change)="setMode(i, 'link')">
+                        <span>Lier existant</span>
+                      </label>
+                      <label class="row gap-sm" style="margin-bottom: 0">
+                        <input type="radio" [name]="'m' + i" [checked]="d.mode === 'skip'" (change)="setMode(i, 'skip')">
+                        <span>Ignorer</span>
+                      </label>
+                    </div>
+                    @if (d.mode === 'link') {
+                      <select class="mt-1" [ngModel]="d.existingId" (ngModelChange)="setExisting(i, $event)">
+                        <option [ngValue]="null">— sélectionner —</option>
+                        @for (c of refs.contacts(); track c.id) {
+                          <option [ngValue]="c.id">{{ c.nom }}@if (c.service_libelle) { ({{ c.service_libelle }}) }</option>
+                        }
+                      </select>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <div class="muted mt-1" style="font-size: 0.78rem">
+            « Lier existant » et « Créer » rattachent le contact à <strong>{{ service.libelle }}</strong>
+            (mise à jour de son service) et renseignent sa fonction. Un nom déjà présent est réutilisé (pas de doublon).
+          </div>
+
+          <label class="row gap-sm mt-2" style="font-size: 0.78rem; margin-bottom: 0">
+            <input type="checkbox" [checked]="showRaw()" (change)="showRaw.set(!showRaw())">
+            <span>Afficher le texte reconnu</span>
+          </label>
+          @if (showRaw()) { <pre class="raw-text mt-1">{{ rawText() }}</pre> }
+        }
+
+        @if (errorMsg()) {
+          <div class="card mt-2" style="border-left: 3px solid var(--danger); color: var(--danger)">{{ errorMsg() }}</div>
+        }
+      }
+
+      <!-- SAVING / DONE / ERROR -->
+      @if (step() === 'saving') {
+        <div style="text-align: center; padding: 2rem" class="muted">Enregistrement en cours…</div>
+      }
+      @if (step() === 'done') {
+        <div style="text-align: center; padding: 2rem; color: var(--ok)">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem">✓</div>
+          <div>{{ addedCount() }} contact(s) rattaché(s).</div>
+        </div>
+      }
+      @if (step() === 'error') {
+        <div class="card" style="border-left: 3px solid var(--danger)">
+          <div style="color: var(--danger); margin-bottom: 0.5rem"><strong>Échec</strong></div>
+          {{ errorMsg() }}
+        </div>
+      }
+    </div>
+
+    <div class="modal-foot">
+      @if (step() === 'review' || step() === 'error') {
+        <button class="btn ghost" (click)="reset()">↩ Recommencer</button>
+      }
+      <button class="btn" (click)="cancel()">Annuler</button>
+      @if (step() === 'review' && decisions().length > 0) {
+        <button class="btn primary" (click)="apply()" [disabled]="keptCount() === 0">
+          Rattacher {{ keptCount() }} contact(s)
+        </button>
+      }
+    </div>
+  </div>
+</div>

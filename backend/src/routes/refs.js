@@ -127,14 +127,15 @@ router.post('/:table', ensureTable, async (req, res, next) => {
         });
       }
       result = await db.execute({
-        sql: `INSERT INTO contacts (nom, email, telephone, actif, service_id)
-              VALUES (?, ?, ?, ?, ?)`,
+        sql: `INSERT INTO contacts (nom, email, telephone, actif, service_id, fonction)
+              VALUES (?, ?, ?, ?, ?, ?)`,
         args: [
           nom,
           b.email ?? null,
           b.telephone ?? null,
           b.actif === 0 ? 0 : 1,
           b.service_id ?? null,
+          b.fonction ?? null,
         ],
       });
     }
@@ -168,7 +169,7 @@ router.put('/:table/:id', ensureTable, async (req, res, next) => {
       simple:  { libelle: 'libelle', actif: 'actif' },
       service: { libelle: 'libelle', actif: 'actif', entite_id: 'entite_id' },
       contact: { nom: 'nom', email: 'email', telephone: 'telephone',
-                 actif: 'actif', service_id: 'service_id' },
+                 actif: 'actif', service_id: 'service_id', fonction: 'fonction' },
     };
     const map = fieldMaps[kind];
 

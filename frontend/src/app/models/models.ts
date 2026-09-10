@@ -30,6 +30,8 @@ export interface ContactRef {
   telephone: string | null;
   actif: number;
   service_id: number | null;
+  /** Fonction organisationnelle du contact (intitulé de poste), nullable. */
+  fonction?: string | null;
   service_libelle?: string | null;
   entite_id?: number | null;
   entite_libelle?: string | null;

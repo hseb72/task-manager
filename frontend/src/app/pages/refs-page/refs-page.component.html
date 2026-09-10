@@ -75,6 +75,9 @@
             <input placeholder="Téléphone"
                    [value]="newContactTelephone()"
                    (input)="setAddField('contactTelephone', $event)">
+            <input placeholder="Fonction"
+                   [value]="newContactFonction()"
+                   (input)="setAddField('contactFonction', $event)">
             <button class="btn primary" (click)="add()">Ajouter</button>
           </div>
         }
@@ -136,6 +139,7 @@
                   <th>Libellé</th>
                   <th style="min-width: 180px">Entité</th>
                   <th style="width: 120px">État</th>
+                  <th style="width: 110px"></th>
                   <th style="width: 80px"></th>
                 </tr>
               </thead>
@@ -163,6 +167,12 @@
                         @else {<span class="badge">Inactif</span>}
                       </button>
                     </td>
+                    <td>
+                      <button class="btn tight" (click)="openServiceEnrich(v)"
+                              title="Ajouter des contacts à ce service depuis une capture d'écran">
+                        🔎 Enrichir
+                      </button>
+                    </td>
                     <td><button class="icon-btn danger" (click)="delete(v)">✕</button></td>
                   </tr>
                 }
@@ -177,6 +187,7 @@
                   <th style="min-width: 160px">Nom</th>
                   <th style="min-width: 180px">Service</th>
                   <th>Entité</th>
+                  <th style="min-width: 140px">Fonction</th>
                   <th>Email</th>
                   <th>Téléphone</th>
                   <th style="width: 100px">État</th>
@@ -205,6 +216,10 @@
                       </select>
                     </td>
                     <td class="muted">{{ v.entite_libelle ?? '—' }}</td>
+                    <td>
+                      <input class="cell-input" [value]="v.fonction ?? ''"
+                             (change)="changeContactField(v, 'fonction', $event)">
+                    </td>
                     <td>
                       <input type="email" class="cell-input" [value]="v.email ?? ''"
                              (change)="changeContactField(v, 'email', $event)">
@@ -242,4 +257,11 @@
 <!-- ====================================================================== -->
 @if (enrichContact(); as c) {
   <app-contact-enrich-dialog [contact]="c" (closed)="onEnrichClosed($event)"></app-contact-enrich-dialog>
+}
+
+<!-- ====================================================================== -->
+<!-- Enrichissement d'un service : ajout de contacts depuis une capture       -->
+<!-- ====================================================================== -->
+@if (enrichService(); as s) {
+  <app-service-enrich-dialog [service]="s" (closed)="onServiceEnrichClosed($event)"></app-service-enrich-dialog>
 }

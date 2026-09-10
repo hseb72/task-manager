@@ -8,11 +8,13 @@ import {
   SimpleRef, ServiceRef, ContactRef, RefKind,
 } from '../../models/models';
 import { ContactEnrichDialogComponent } from '../../components/contact-enrich-dialog/contact-enrich-dialog.component';
+import { ServiceEnrichDialogComponent } from '../../components/service-enrich-dialog/service-enrich-dialog.component';
 
 @Component({
   selector: 'app-refs-page',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive, ContactEnrichDialogComponent],
+  imports: [CommonModule, FormsModule, RouterLink, RouterLinkActive,
+            ContactEnrichDialogComponent, ServiceEnrichDialogComponent],
   templateUrl: './refs-page.component.html',
   styleUrl: './refs-page.component.css',
 })
@@ -32,9 +34,12 @@ export class RefsPageComponent implements OnInit {
   newContactEmail = signal('');
   newContactTelephone = signal('');
   newContactServiceId = signal<number | null>(null);
+  newContactFonction = signal('');
 
   /** Contact en cours d'enrichissement par capture d'écran (ou null). */
   enrichContact = signal<ContactRef | null>(null);
+  /** Service en cours d'enrichissement (ajout de contacts par capture) ou null. */
+  enrichService = signal<ServiceRef | null>(null);
 
   meta = computed<ReferenceTableMeta | undefined>(() =>
     this.refs.tables().find(t => t.name === this.current())
@@ -91,6 +96,7 @@ export class RefsPageComponent implements OnInit {
     this.newContactEmail.set('');
     this.newContactTelephone.set('');
     this.newContactServiceId.set(null);
+    this.newContactFonction.set('');
     this.errorMsg.set(null);
   }
 
@@ -119,6 +125,7 @@ export class RefsPageComponent implements OnInit {
         email: this.newContactEmail().trim() || null,
         telephone: this.newContactTelephone().trim() || null,
         service_id: this.newContactServiceId(),
+        fonction: this.newContactFonction().trim() || null,
       } as Partial<ContactRef>;
     }
 
@@ -166,7 +173,7 @@ export class RefsPageComponent implements OnInit {
     if (!newNom || newNom === v.nom) return;
     this.patch(v.id, { nom: newNom });
   }
-  changeContactField(v: ContactRef, field: 'email' | 'telephone', ev: Event) {
+  changeContactField(v: ContactRef, field: 'email' | 'telephone' | 'fonction', ev: Event) {
     this.patch(v.id, { [field]: this.valOrNull(ev) } as Partial<ContactRef>);
   }
   changeContactService(v: ContactRef, ev: Event) {
@@ -189,6 +196,15 @@ export class RefsPageComponent implements OnInit {
     if (contact && res.serviceId != null) {
       this.patch(contact.id, { service_id: res.serviceId } as Partial<ContactRef>);
     }
+  }
+
+  /* Ajout de contacts à un service par capture d'écran (tuiles). */
+  openServiceEnrich(v: ServiceRef) {
+    this.enrichService.set(v);
+  }
+  onServiceEnrichClosed(res: { added: number }) {
+    this.enrichService.set(null);
+    if (res.added > 0) this.load();   // rafraîchit le nombre/contenu courant
   }
 
   // Commun
@@ -216,6 +232,7 @@ export class RefsPageComponent implements OnInit {
       case 'contactEmail':        this.newContactEmail.set(v); break;
       case 'contactTelephone':    this.newContactTelephone.set(v); break;
       case 'contactService':      this.newContactServiceId.set(v === '' ? null : Number(v)); break;
+      case 'contactFonction':     this.newContactFonction.set(v); break;
     }
   }
 
