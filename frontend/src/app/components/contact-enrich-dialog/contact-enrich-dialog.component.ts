@@ -8,9 +8,6 @@ import { OcrService } from '../../services/ocr.service';
 import { RefsService } from '../../services/refs.service';
 import { ContactRef, ServiceRef, SimpleRef } from '../../models/models';
 
-/** Paire « libellé : valeur » extraite du texte OCR. */
-interface Pair { key: string; value: string; }
-
 @Component({
   selector: 'app-contact-enrich-dialog',
   standalone: true,
@@ -42,14 +39,21 @@ export class ContactEnrichDialogComponent {
   ocrProgress = this.ocrSrv.progress;
   ocrStatus = this.ocrSrv.status;
 
-  private static readonly SERVICE_KEYS = [
-    'service', 'departement', 'dept', 'equipe', 'team', 'unite', 'pole',
-    'division', 'cellule', 'bureau', 'affectation',
+  /**
+   * Libellés qui précèdent la valeur du SERVICE, par ordre de priorité
+   * (le plus spécifique d'abord). La valeur est soit sur la même ligne après
+   * « : », soit sur la ligne suivante.
+   */
+  private static readonly SERVICE_LABELS = [
+    'unite d affectation principale', 'unite d affectation', 'affectation',
+    'service', 'departement', 'equipe', 'pole', 'division', 'cellule', 'bureau', 'unite',
   ];
-  private static readonly ENTITE_KEYS = [
-    'entite', 'entity', 'direction', 'societe', 'company', 'organisation',
-    'organization', 'etablissement', 'filiale', 'site', 'bu', 'business unit',
+  /** Libellés qui précèdent la valeur de l'ENTITÉ (métier). « métier » en premier. */
+  private static readonly ENTITE_LABELS = [
+    'metier', 'entite de rattachement', 'direction', 'entite', 'societe', 'etablissement', 'filiale',
   ];
+  /** Libellés à ne jamais retenir pour l'entité (p. ex. « Entité juridique »). */
+  private static readonly ENTITE_EXCLUDE = ['juridique'];
 
   /* ------------------------------------------------------------------ */
   /*  Réception de l'image                                               */
@@ -102,9 +106,9 @@ export class ContactEnrichDialogComponent {
   /* ------------------------------------------------------------------ */
 
   private deduce(lines: string[]) {
-    const pairs = this.buildPairs(lines);
-    const svc = this.pickByKeys(pairs, ContactEnrichDialogComponent.SERVICE_KEYS);
-    const ent = this.pickByKeys(pairs, ContactEnrichDialogComponent.ENTITE_KEYS);
+    const svc = this.findValue(lines, ContactEnrichDialogComponent.SERVICE_LABELS, []);
+    const ent = this.findValue(lines, ContactEnrichDialogComponent.ENTITE_LABELS,
+      ContactEnrichDialogComponent.ENTITE_EXCLUDE);
     this.serviceText.set(svc);
     this.entiteText.set(ent);
 
@@ -121,35 +125,50 @@ export class ContactEnrichDialogComponent {
     this.serviceId.set(serviceMatch?.id ?? null);
   }
 
-  /** Construit des paires libellé/valeur à partir des lignes OCR. */
-  private buildPairs(lines: string[]): Pair[] {
-    const pairs: Pair[] = [];
-    const allKeys = [
-      ...ContactEnrichDialogComponent.SERVICE_KEYS,
-      ...ContactEnrichDialogComponent.ENTITE_KEYS,
-    ];
-    for (let i = 0; i < lines.length; i++) {
-      const line = (lines[i] ?? '').trim();
-      if (!line) continue;
-      // Cas 1 : « Libellé : valeur » sur la même ligne.
-      const m = line.match(/^\s*([\p{L}0-9 '/\-]{2,40})\s*[:：]\s*(.+?)\s*$/u);
-      if (m) { pairs.push({ key: m[1]!.trim(), value: m[2]!.trim() }); continue; }
-      // Cas 2 : un libellé connu seul sur la ligne, valeur sur la ligne suivante.
-      const k = this.normalize(line);
-      if (allKeys.some(kw => k === kw || k.startsWith(kw + ' ') || k.endsWith(' ' + kw))) {
-        const next = (lines[i + 1] ?? '').trim();
-        if (next && !next.includes(':')) pairs.push({ key: line, value: next });
+  /**
+   * Cherche la valeur associée à l'un des libellés (par ordre de priorité).
+   * La valeur est prise après « : » sur la même ligne, sinon sur la première
+   * ligne suivante qui n'est pas elle-même un libellé.
+   */
+  private findValue(lines: string[], labels: string[], exclude: string[]): string | null {
+    const norms = lines.map(l => this.normalize(l ?? ''));
+    for (const label of labels) {
+      for (let i = 0; i < lines.length; i++) {
+        const norm = norms[i]!;
+        if (!norm) continue;
+        if (exclude.some(x => norm.includes(x))) continue;
+        if (!norm.includes(label)) continue;
+
+        // Valeur sur la même ligne, après « : »
+        const raw = (lines[i] ?? '').trim();
+        const inline = raw.match(/[:：]\s*(.+)$/);
+        if (inline && inline[1]!.trim()) return inline[1]!.trim();
+
+        // Sinon : première ligne suivante non vide qui n'est pas un libellé
+        for (let j = i + 1; j < lines.length; j++) {
+          const nxt = (lines[j] ?? '').trim();
+          if (!nxt) continue;
+          if (/[:：]\s*$/.test(nxt)) break;          // ligne = libellé sans valeur → on arrête
+          if (this.looksLikeLabel(norms[j]!)) break;  // ligne = autre libellé connu → on arrête
+          return nxt;
+        }
       }
     }
-    return pairs;
+    return null;
   }
 
-  private pickByKeys(pairs: Pair[], keys: string[]): string | null {
-    for (const p of pairs) {
-      const k = this.normalize(p.key);
-      if (keys.some(kw => k.includes(kw)) && p.value) return p.value.trim();
-    }
-    return null;
+  /**
+   * La ligne est-elle *elle-même* un libellé connu (et non une valeur qui
+   * contient un mot de libellé, ex. « Direction des Systèmes d'Information ») ?
+   * On exige une égalité exacte après normalisation (le « : » final est déjà
+   * traité à part).
+   */
+  private looksLikeLabel(norm: string): boolean {
+    const all = [
+      ...ContactEnrichDialogComponent.SERVICE_LABELS,
+      ...ContactEnrichDialogComponent.ENTITE_LABELS,
+    ];
+    return all.some(l => norm === l);
   }
 
   private bestMatch<T extends { libelle: string }>(rows: T[], text: string): T | null {
@@ -171,7 +190,8 @@ export class ContactEnrichDialogComponent {
   private normalize(s: string): string {
     return String(s ?? '')
       .toLowerCase()
-      .normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .normalize('NFD').replace(/[̀-ͯ]/g, '')   // retire les accents
+      .replace(/[^a-z0-9]+/g, ' ')               // ponctuation/apostrophes → espace
       .replace(/\s+/g, ' ')
       .trim();
   }
