@@ -32,9 +32,14 @@ export class ContactEnrichDialogComponent {
   /** Textes bruts détectés. */
   serviceText = signal<string | null>(null);
   entiteText = signal<string | null>(null);
-  /** Rapprochements avec les référentiels. */
+  /** Rapprochements / sélections dans les référentiels. */
   serviceId = signal<number | null>(null);
+  entiteId = signal<number | null>(null);
   entiteMatch = signal<SimpleRef | null>(null);
+
+  /** Création à la volée de référentiels. */
+  creating = signal(false);
+  createError = signal<string | null>(null);
 
   ocrProgress = this.ocrSrv.progress;
   ocrStatus = this.ocrSrv.status;
@@ -114,6 +119,7 @@ export class ContactEnrichDialogComponent {
 
     const entiteMatch = ent ? this.bestMatch(this.refs.entites(), ent) as SimpleRef | null : null;
     this.entiteMatch.set(entiteMatch);
+    this.entiteId.set(entiteMatch?.id ?? null);
 
     let serviceMatch = svc ? this.bestMatch(this.refs.services(), svc) as ServiceRef | null : null;
     // Si l'entité est connue, on privilégie un service rattaché à cette entité.
@@ -123,6 +129,53 @@ export class ContactEnrichDialogComponent {
       if (refined) serviceMatch = refined;
     }
     this.serviceId.set(serviceMatch?.id ?? null);
+  }
+
+  /* ------------------------------------------------------------------ */
+  /*  Création à la volée (entité / service)                             */
+  /* ------------------------------------------------------------------ */
+
+  /** Le texte détecté ne correspond à aucune entité existante ? */
+  canCreateEntite(): boolean {
+    const t = (this.entiteText() ?? '').trim();
+    if (!t) return false;
+    const n = this.normalize(t);
+    return !this.refs.entites().some(e => this.normalize(e.libelle) === n);
+  }
+  /** Le texte détecté ne correspond à aucun service existant ? */
+  canCreateService(): boolean {
+    const t = (this.serviceText() ?? '').trim();
+    if (!t) return false;
+    const n = this.normalize(t);
+    return !this.refs.services().some(s => this.normalize(s.libelle) === n);
+  }
+
+  createEntite() {
+    const libelle = (this.entiteText() ?? '').trim();
+    if (!libelle) return;
+    this.creating.set(true);
+    this.createError.set(null);
+    this.refs.create('entites', { libelle } as any).subscribe({
+      next: (row: any) => this.refs.loadAll().subscribe(() => {
+        this.entiteId.set(row.id);
+        this.creating.set(false);
+      }),
+      error: err => { this.createError.set(err?.error?.error ?? err.message ?? 'Erreur'); this.creating.set(false); },
+    });
+  }
+
+  createService() {
+    const libelle = (this.serviceText() ?? '').trim();
+    if (!libelle) return;
+    this.creating.set(true);
+    this.createError.set(null);
+    this.refs.create('services', { libelle, entite_id: this.entiteId() } as any).subscribe({
+      next: (row: any) => this.refs.loadAll().subscribe(() => {
+        this.serviceId.set(row.id);
+        this.creating.set(false);
+      }),
+      error: err => { this.createError.set(err?.error?.error ?? err.message ?? 'Erreur'); this.creating.set(false); },
+    });
   }
 
   /**
@@ -202,9 +255,9 @@ export class ContactEnrichDialogComponent {
 
   /** Entité affichée : celle du service choisi (dérivée), sinon l'entité détectée. */
   selectedServiceEntite(): string | null {
-    const id = this.serviceId();
-    const s = this.refs.services().find(x => x.id === id);
-    return s?.entite_libelle ?? this.entiteMatch()?.libelle ?? null;
+    const s = this.refs.services().find(x => x.id === this.serviceId());
+    const ent = this.refs.entites().find(e => e.id === this.entiteId());
+    return s?.entite_libelle ?? ent?.libelle ?? this.entiteMatch()?.libelle ?? null;
   }
 
   apply() {
@@ -218,7 +271,10 @@ export class ContactEnrichDialogComponent {
     this.serviceText.set(null);
     this.entiteText.set(null);
     this.serviceId.set(null);
+    this.entiteId.set(null);
     this.entiteMatch.set(null);
+    this.creating.set(false);
+    this.createError.set(null);
   }
   cancel() { this.closed.emit({}); }
 

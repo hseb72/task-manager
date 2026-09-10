@@ -61,35 +61,49 @@
           </div>
 
           <div>
-            <table class="data-table" style="margin-bottom: 0.8rem">
-              <tbody>
-                <tr>
-                  <td style="width: 90px" class="muted">Service</td>
-                  <td>
-                    <strong>{{ serviceText() ?? '—' }}</strong>
-                    @if (serviceId()) { <span class="badge ok" style="margin-left:.3rem">rapproché</span> }
-                    @else if (serviceText()) { <span class="badge" style="margin-left:.3rem">aucun correspondant</span> }
-                  </td>
-                </tr>
-                <tr>
-                  <td class="muted">Entité</td>
-                  <td>
-                    <strong>{{ entiteText() ?? '—' }}</strong>
-                    @if (selectedServiceEntite(); as e) { <span class="badge ok" style="margin-left:.3rem">↦ {{ e }}</span> }
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+            <div class="muted mb-2" style="font-size: 0.8rem">
+              Détecté — Service : <strong>{{ serviceText() ?? '—' }}</strong> ·
+              Entité : <strong>{{ entiteText() ?? '—' }}</strong>
+            </div>
 
-            <label>Rattacher au service</label>
-            <select [ngModel]="serviceId()" (ngModelChange)="serviceId.set($event)">
-              <option [ngValue]="null">— aucun —</option>
-              @for (s of refs.services(); track s.id) {
-                <option [ngValue]="s.id">{{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }</option>
+            <!-- Entité : sélection ou création à la volée -->
+            <label>Entité (métier)</label>
+            <div class="row gap-sm">
+              <select [ngModel]="entiteId()" (ngModelChange)="entiteId.set($event)" style="flex: 1">
+                <option [ngValue]="null">— aucune —</option>
+                @for (e of refs.entites(); track e.id) {
+                  <option [ngValue]="e.id">{{ e.libelle }}</option>
+                }
+              </select>
+              @if (canCreateEntite()) {
+                <button class="btn" (click)="createEntite()" [disabled]="creating()"
+                        title="Créer cette entité dans le référentiel">➕ Créer « {{ entiteText() }} »</button>
               }
-            </select>
+            </div>
+
+            <!-- Service : sélection ou création à la volée -->
+            <label class="mt-2">Rattacher au service</label>
+            <div class="row gap-sm">
+              <select [ngModel]="serviceId()" (ngModelChange)="serviceId.set($event)" style="flex: 1">
+                <option [ngValue]="null">— aucun —</option>
+                @for (s of refs.services(); track s.id) {
+                  <option [ngValue]="s.id">{{ s.libelle }}@if (s.entite_libelle) { — {{ s.entite_libelle }} }</option>
+                }
+              </select>
+              @if (canCreateService()) {
+                <button class="btn" (click)="createService()" [disabled]="creating()"
+                        title="Créer ce service (rattaché à l'entité sélectionnée)">➕ Créer « {{ serviceText() }} »</button>
+              }
+            </div>
+
+            @if (selectedServiceEntite(); as e) {
+              <div class="muted mt-1" style="font-size: 0.78rem">Entité du contact : <strong>{{ e }}</strong> (dérivée du service).</div>
+            }
+            @if (createError()) {
+              <div class="mt-1" style="color: var(--danger); font-size: 0.8rem">{{ createError() }}</div>
+            }
             <div class="muted mt-1" style="font-size: 0.78rem">
-              L'entité du contact est dérivée du service choisi. Corrigez la sélection si la détection est imparfaite.
+              Le service inexistant peut être créé à la volée (rattaché à l'entité choisie, elle-même créable).
             </div>
           </div>
         </div>
