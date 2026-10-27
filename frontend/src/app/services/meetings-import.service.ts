@@ -215,6 +215,8 @@ export class MeetingsImportService {
    *   alias explicite ≫ code applicatif prioritaire (AP+5 chiffres ou 1+6 chiffres,
    *   éventuellement [entre crochets]) ≫ code majuscule dans le sujet (4 lettres
    *   privilégié) > code dans la description > code connu en minuscules > mot-clé.
+   * Quand l'objet est générique (aucun code ni mot-clé propre), la description
+   * devient la meilleure source et ses codes/mots-clés jouent au niveau du sujet.
    * Départage : fréquence du code dans tout le jeu, puis proximité de 4 lettres,
    * puis ordre alphabétique (déterministe).
    */
@@ -254,25 +256,36 @@ export class MeetingsImportService {
     for (const m of meetings) {
       const subj = m.subject || '', desc = m.description || '';
       const hay = this.normalize(subj + ' ' + desc);
+      const subjPrio = priorityOf(subj), descPrio = priorityOf(desc);
       const subjCodes = codesOf(subj), descCodes = codesOf(desc);
+      const kwS = this.keywordFrom(subj, excluded, gi);
+      const kwD = this.keywordFrom(desc, excluded, gi);
+
+      // L'objet est « générique » quand il n'apporte aucun thème propre : ni code
+      // applicatif, ni code à lettres, et au mieux un mot-clé générique. Dans ce
+      // cas la description devient la meilleure source et joue au niveau du sujet.
+      const subjHasTheme = subjPrio.length > 0 || subjCodes.length > 0
+        || (!!kwS && !gi.has(this.normalize(kwS)));
+      const descBoost = !subjHasTheme;
+
       const cands: { key: string; label: string; score: number; fallback: boolean }[] = [];
       const push = (key: string, label: string, score: number, fallback: boolean) =>
         cands.push({ key, label, score, fallback });
 
       for (const a of normAliases) if (!excluded.has(a.code) && a.term && hay.includes(a.term)) push(a.code, a.code, 1000, false);
       // Codes applicatifs prioritaires (avant les codes à 4 lettres).
-      for (const c of priorityOf(subj)) push(c, c, 200, false);
-      for (const c of priorityOf(desc)) push(c, c, 150, false);
+      for (const c of subjPrio) push(c, c, 200, false);
+      for (const c of descPrio) push(c, c, descBoost ? 200 : 150, false);
       for (const c of subjCodes) push(c, c, c.length === 4 ? 100 : 80, false);
-      for (const c of descCodes) push(c, c, c.length === 4 ? 60 : 50, false);
+      // Codes de la description : au niveau du sujet si l'objet est générique.
+      for (const c of descCodes) push(c, c, descBoost ? (c.length === 4 ? 100 : 80) : (c.length === 4 ? 60 : 50), false);
       for (const c of known) {                                   // occurrence en minuscules
         if (subjCodes.includes(c) || descCodes.includes(c)) continue;
         if (new RegExp('\\b' + c.toLowerCase() + '\\b').test(hay)) push(c, c, c.length === 4 ? 55 : 45, false);
       }
-      const kwS = this.keywordFrom(subj, excluded, gi);
       if (kwS) push('kw:' + this.normalize(kwS), kwS, gi.has(this.normalize(kwS)) ? 6 : 30, true);
-      const kwD = this.keywordFrom(desc, excluded, gi);
-      if (kwD) push('kw:' + this.normalize(kwD), kwD, gi.has(this.normalize(kwD)) ? 5 : 20, true);
+      // Mot-clé de la description : au niveau du sujet si l'objet est générique.
+      if (kwD) push('kw:' + this.normalize(kwD), kwD, gi.has(this.normalize(kwD)) ? 5 : (descBoost ? 30 : 20), true);
 
       // Dépriorisation des candidats génériques (y compris un code générique).
       for (const c of cands) if (gi.has(this.normalize(c.label))) c.score = Math.min(c.score, 8);
@@ -351,6 +364,11 @@ export class MeetingsImportService {
     'reunion', 'meeting', 'call', 'point', 'comite', 'comit', 'hebdo', 'weekly', 'mensuel',
     'suivi', 'revue', 'review', 'daily', 'sync', 'atelier', 'workshop', 'session',
     'avec', 'pour', 'sur', 'les', 'des', 'une', 'the', 'and', 'and',
+    // Qualificatifs de récurrence / fréquence : jamais des thèmes.
+    'hebdomadaire', 'mensuelle', 'bimensuel', 'bimensuelle', 'bimestriel',
+    'trimestriel', 'trimestrielle', 'trimestre', 'semestriel', 'semestrielle',
+    'annuel', 'annuelle', 'quotidien', 'quotidienne', 'biweekly', 'monthly',
+    'quarterly', 'periodique', 'recurrent', 'recurrente', 'reguliere', 'regulier',
   ]);
 
   /** Mot-clé de repli : le plus long mot significatif, en privilégiant un mot
