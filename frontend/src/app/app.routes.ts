@@ -16,5 +16,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./pages/refs-page/refs-page.component').then(m => m.RefsPageComponent),
   },
+  {
+    path: 'reunions',
+    loadComponent: () =>
+      import('./pages/meetings-page/meetings-page.component').then(m => m.MeetingsPageComponent),
+  },
   { path: '**', redirectTo: '' },
 ];

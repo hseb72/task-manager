@@ -16,6 +16,7 @@ import { RefsService } from './services/refs.service';
         <nav class="app-nav">
           <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Tâches</a>
           <a routerLink="/referentiels" routerLinkActive="active">Référentiels</a>
+          <a routerLink="/reunions" routerLinkActive="active">Réunions</a>
         </nav>
       </header>
       <main class="app-main">

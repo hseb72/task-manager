@@ -1,0 +1,165 @@
+<div class="page-header">
+  <div>
+    <h1>Réunions — synthèse par thème</h1>
+    <div class="lead">Importez un export CSV de réunions Teams/Outlook (un an d'historique) et obtenez une synthèse regroupée par thème.</div>
+  </div>
+  @if (step() !== 'upload') {
+    <button class="btn" (click)="reset()">↩ Nouvel import</button>
+  }
+</div>
+
+@if (error()) {
+  <div class="card" style="border-left: 3px solid var(--danger); color: var(--danger); margin-bottom: 1rem">{{ error() }}</div>
+}
+
+<!-- ====================================================================== -->
+<!-- ÉTAPE 1 : import                                                        -->
+<!-- ====================================================================== -->
+@if (step() === 'upload') {
+  <div class="card">
+    <div class="drop-zone" (drop)="onDrop($event)" (dragover)="onDragOver($event)">
+      <div class="drop-icon">📅</div>
+      <div class="drop-text">Glissez un fichier <strong>.csv</strong> ici</div>
+      <label class="btn primary" style="display: inline-block">
+        <input type="file" accept=".csv,text/csv,text/plain" style="display: none" (change)="onFileSelected($event)">
+        …ou choisir un fichier
+      </label>
+      <div class="muted mt-2" style="font-size: 0.78rem">
+        Export CSV depuis Teams/Outlook (séparateur « ; » ou « , » détecté automatiquement).
+        Tout est traité localement dans le navigateur.
+      </div>
+    </div>
+
+    <details class="mt-2">
+      <summary class="muted" style="cursor: pointer; font-size: 0.85rem">…ou coller le contenu CSV</summary>
+      <textarea rows="6" class="mt-1" style="width: 100%; font-family: var(--font-mono); font-size: 0.78rem"
+                [value]="pasteText()" (input)="pasteText.set(v($event))"
+                placeholder="Collez ici les lignes CSV (avec l'en-tête)…"></textarea>
+      <button class="btn mt-1" (click)="usePasted()" [disabled]="!pasteText().trim()">Analyser le texte collé</button>
+    </details>
+  </div>
+}
+
+<!-- ====================================================================== -->
+<!-- ÉTAPE 2 : correspondance des colonnes                                   -->
+<!-- ====================================================================== -->
+@if (step() === 'map') {
+  <div class="card">
+    <h3>Correspondance des colonnes <span class="muted" style="font-weight: normal">— {{ fileName() }} · {{ rows().length }} ligne(s)</span></h3>
+    <div class="muted mb-2" style="font-size: 0.82rem">
+      Vérifiez l'association auto-détectée. Le <strong>sujet</strong> est obligatoire ; les autres champs sont optionnels.
+    </div>
+
+    <div class="map-grid">
+      @for (c of cols; track c.key) {
+        <label class="map-row">
+          <span class="map-label">{{ c.label }}@if (c.hint) { <span class="muted" style="font-weight: normal"> · {{ c.hint }}</span> }</span>
+          <select [ngModel]="mapValue(c.key)" (ngModelChange)="setMap(c.key, $event)">
+            <option [ngValue]="-1">— aucune —</option>
+            @for (h of headers(); track $index) {
+              <option [ngValue]="$index">{{ h || '(colonne ' + ($index + 1) + ')' }}</option>
+            }
+          </select>
+        </label>
+      }
+    </div>
+
+    <div class="mt-2">
+      <label>Codes génériques exclus du regroupement</label>
+      <input [value]="excludedText()" (input)="excludedText.set(v($event))"
+             placeholder="COSIT, COLEC, ITVC" style="max-width: 420px">
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        Ces codes (types de réunions) ne servent jamais de thème : le regroupement se fait sur l'autre code présent.
+      </div>
+    </div>
+
+    @if (!subjectMapped) {
+      <div class="muted mt-2" style="color: var(--danger); font-size: 0.82rem">Associez au moins la colonne « Sujet » pour continuer.</div>
+    }
+
+    <div class="row gap-sm mt-2">
+      <button class="btn" (click)="reset()">Annuler</button>
+      <button class="btn primary" (click)="analyze()" [disabled]="!subjectMapped">Analyser</button>
+    </div>
+  </div>
+}
+
+<!-- ====================================================================== -->
+<!-- ÉTAPE 3 : synthèse                                                      -->
+<!-- ====================================================================== -->
+@if (step() === 'result') {
+  @if (summary(); as s) {
+    <div class="zone-summary mb-2">
+      <span class="kpi"><strong>{{ s.active }}</strong> réunions</span>
+      <span class="kpi"><strong>{{ s.themes }}</strong> thèmes</span>
+      <span class="kpi"><strong>{{ fmt(s.totalMin) }}</strong> cumulées</span>
+      <span class="kpi muted">{{ s.cancelled }} annulée(s)</span>
+      <button class="btn tight" style="margin-left: auto" (click)="exportSynthesis()">⤓ Exporter la synthèse (CSV)</button>
+    </div>
+  }
+
+  @if (synthesis().length === 0) {
+    <div class="card empty-state">Aucune réunion exploitable dans ce fichier.</div>
+  } @else {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th style="width: 28px"></th>
+          <th>Thème</th>
+          <th style="width: 90px">Réunions</th>
+          <th style="width: 120px">Durée totale</th>
+          <th style="width: 90px">Annulées</th>
+          <th>Top 5 acteurs</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (t of synthesis(); track t.key) {
+          <tr class="theme-row" (click)="toggleExpand(t.key)">
+            <td class="muted">{{ isExpanded(t.key) ? '▾' : '▸' }}</td>
+            <td>
+              <strong>{{ t.label }}</strong>
+              @if (t.fromFallback) { <span class="badge" title="Déduit d'un mot-clé du sujet">mot-clé</span> }
+              @else { <span class="badge ok" title="Code détecté">code</span> }
+            </td>
+            <td>{{ t.count }}</td>
+            <td>{{ fmt(t.totalDurationMin) }}</td>
+            <td class="muted">{{ t.cancelledCount || '—' }}</td>
+            <td style="font-size: 0.82rem">
+              @for (a of t.topActors; track a.actor) {
+                <span class="actor">{{ a.actor }} <span class="muted">({{ a.count }})</span></span>
+              }
+              @if (t.topActors.length === 0) { <span class="muted">—</span> }
+            </td>
+          </tr>
+          @if (isExpanded(t.key)) {
+            <tr class="detail-row">
+              <td></td>
+              <td colspan="5">
+                <table class="data-table nested">
+                  <thead>
+                    <tr><th>Date</th><th>Heure</th><th>Sujet</th><th>Organisateur</th><th style="width: 90px">Durée</th></tr>
+                  </thead>
+                  <tbody>
+                    @for (m of t.meetings; track $index) {
+                      <tr>
+                        <td class="mono">{{ m.dayISO || '—' }}</td>
+                        <td class="mono">{{ m.time || '—' }}</td>
+                        <td>{{ m.subject }}</td>
+                        <td class="muted">{{ m.organizer || '—' }}</td>
+                        <td>{{ fmt(m.durationMin) }}</td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </td>
+            </tr>
+          }
+        }
+      </tbody>
+    </table>
+    <div class="muted mt-1" style="font-size: 0.78rem">
+      Cliquez une ligne pour voir le détail des réunions du thème. Les réunions annulées sont exclues des durées et du top acteurs
+      (elles sont comptées à part). Les acteurs cumulent organisateur, destinataires obligatoires et facultatifs.
+    </div>
+  }
+}

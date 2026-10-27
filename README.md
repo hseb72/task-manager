@@ -175,6 +175,17 @@ Bouton **⋯** par ligne pour ouvrir un panneau détaillé avec :
 - **Contacts** : impossible de créer deux contacts du **même nom** (garde-fou anti-doublon). Colonne **Fonction** (éditable, nullable). Bouton **🔎 Enrichir** par contact : on dépose la **capture de la fiche annuaire** ; le **service** et l'**entité (métier)** sont déduits, rapprochés des référentiels, et **créables à la volée** si absents, puis appliqués (`service_id`, l'entité en découlant).
 - **Services** : bouton **🔎 Enrichir** par service : on dépose une **capture des tuiles de contacts** ; nom et rôle (→ **fonction**) sont extraits par tuile (id et interne/externe ignorés) et, après validation (créer / lier / ignorer), les contacts sont **rattachés au service**. Tout se passe dans le navigateur — aucun accès réseau à l'annuaire.
 
+### c) Page `Réunions` — synthèse par thème
+Outil autonome d'analyse d'un **export CSV de réunions** (Teams/Outlook, p. ex. un an d'historique), traité **entièrement dans le navigateur** (aucune donnée envoyée au serveur, pas de persistance).
+
+1. **Import** : dépôt d'un fichier `.csv` (ou collage) ; le séparateur (`;`, `,`, tab) est détecté, les guillemets/retours à la ligne gérés.
+2. **Correspondance des colonnes** : auto-détection (FR + EN) de Sujet, Organisateur, Description, Destinataires obligatoires/facultatifs, Date/Heure de début (et fin), Durée, Statut — ajustable manuellement. Le **sujet** est obligatoire.
+3. **Analyse** : pour chaque réunion sont extraits sujet, organisateur, description, participants obligatoires/facultatifs, jour et heure, durée planifiée (colonne dédiée `min`/`h:mm`, sinon fin − début) et statut.
+4. **Synthèse par thème** :
+   - regroupement sur un **code** (3–6 lettres majuscules, 4 privilégié) tiré du sujet puis de la description ; les codes **génériques** (`COSIT`, `COLEC`, `ITVC`, liste éditable) sont **exclus** (types de réunion, pas des sujets) ; à défaut de code, repli sur un **mot-clé** du sujet ;
+   - par thème : nombre de réunions, **somme des durées**, compteur d'**annulées** (exclues des calculs), et **top 5 des acteurs** (organisateur + obligatoires + facultatifs, par nombre de réunions du thème où ils apparaissent) ;
+   - tableau trié par durée cumulée, lignes dépliables (détail des réunions), **export CSV** de la synthèse.
+
 ---
 
 ## 4. Démarrer rapidement (résumé)
