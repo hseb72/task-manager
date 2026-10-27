@@ -182,7 +182,9 @@ Outil autonome d'analyse d'un **export CSV de réunions** (Teams/Outlook, p. ex.
 2. **Correspondance des colonnes** : auto-détection (FR + EN) de Sujet, Organisateur, Description, Destinataires obligatoires/facultatifs, Date/Heure de début (et fin), Durée, Statut — ajustable manuellement. Le **sujet** est obligatoire.
 3. **Analyse** : pour chaque réunion sont extraits sujet, organisateur, description, participants obligatoires/facultatifs, jour et heure, durée planifiée (colonne dédiée `min`/`h:mm`, sinon fin − début) et statut.
 4. **Synthèse par thème** :
-   - regroupement sur un **code** (3–6 lettres majuscules, 4 privilégié) tiré du sujet puis de la description ; les codes **génériques** (`COSIT`, `COLEC`, `ITVC`, liste éditable) sont **exclus** (types de réunion, pas des sujets) ; à défaut de code, repli sur un **mot-clé** du sujet ;
+   - **chaque réunion n'est comptée que dans un seul thème** ; quand plusieurs thèmes sont possibles, le plus **pertinent** est retenu par un score (alias explicite ≫ code majuscule du sujet, 4 lettres privilégié > code en description > code connu écrit en minuscules > mot-clé) ;
+   - les **termes génériques** (projet, infra/infrastructure, cadrage, démo/démonstration… — liste éditable) sont **dépriorisés** : ils ne l'emportent jamais sur un vrai thème en cas de litige, mais restent utilisables en dernier recours ;
+   - regroupement sur un **code** (3–6 lettres majuscules, 4 privilégié) tiré du sujet puis de la description ; les codes **génériques** (`COSIT`, `COLEC`, `ITVC`, liste éditable) sont **exclus** (types de réunion) ; le même code en **minuscules** est rattaché automatiquement, et une **autre désignation** via une table d'**alias** (`désignation = CODE`) ;
    - par thème : nombre de réunions, **somme des durées**, compteur d'**annulées** (exclues des calculs), et **top 5 des acteurs** (organisateur + obligatoires + facultatifs, par nombre de réunions du thème où ils apparaissent) ;
    - tableau trié par durée cumulée, lignes dépliables (détail des réunions), **export CSV** de la synthèse.
 

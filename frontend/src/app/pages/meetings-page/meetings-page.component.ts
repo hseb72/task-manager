@@ -27,6 +27,8 @@ export class MeetingsPageComponent {
   excludedText = signal<string>('COSIT, COLEC, ITVC');
   /** Alias « désignation = CODE », séparés par des virgules ou retours ligne. */
   aliasesText = signal<string>('');
+  /** Termes génériques dépriorisés (séparés par virgules/espaces). */
+  genericsText = signal<string>('projet, infra, infrastructure, cadrage, démo, démonstration, atelier, point, suivi, revue, comité, chantier, dossier');
 
   meetings = signal<Meeting[]>([]);
   synthesis = signal<ThemeSynthesis[]>([]);
@@ -118,7 +120,8 @@ export class MeetingsPageComponent {
       const [term, code] = line.split('=');
       return { term: (term ?? '').trim(), code: (code ?? '').trim() };
     }).filter(a => a.term && a.code);
-    const ms = this.svc.buildMeetings(this.rows(), this.map(), { excluded, aliases });
+    const generics = this.genericsText().split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+    const ms = this.svc.buildMeetings(this.rows(), this.map(), { excluded, aliases, generics });
     this.meetings.set(ms);
     this.synthesis.set(this.svc.synthesize(ms));
     this.expanded.set(new Set());

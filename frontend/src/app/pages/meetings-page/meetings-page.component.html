@@ -84,6 +84,16 @@
       </div>
     </div>
 
+    <div class="mt-2">
+      <label>Termes génériques <span class="muted" style="font-weight: normal">(non prioritaires)</span></label>
+      <input [value]="genericsText()" (input)="genericsText.set(v($event))"
+             placeholder="projet, infra, cadrage, démo…" style="width: 100%; max-width: 640px">
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        En cas de litige d'appartenance, ces termes ne l'emportent jamais sur un vrai thème
+        (ils restent utilisables si aucun autre thème n'est possible). Chaque réunion n'est comptée que dans un seul thème.
+      </div>
+    </div>
+
     @if (!subjectMapped) {
       <div class="muted mt-2" style="color: var(--danger); font-size: 0.82rem">Associez au moins la colonne « Sujet » pour continuer.</div>
     }

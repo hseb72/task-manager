@@ -49,6 +49,9 @@ export interface ImportOptions {
   excluded: string[];
   /** Alias : une désignation libre (mot/expression) rattachée à un code. */
   aliases?: { term: string; code: string }[];
+  /** Termes génériques dépriorisés (projet, infra, cadrage, démo…) : jamais
+   *  gagnants face à un vrai thème, mais utilisables en dernier recours. */
+  generics?: string[];
 }
 
 export interface ParseResult {
@@ -61,6 +64,14 @@ export interface ParseResult {
 export class MeetingsImportService {
 
   readonly DEFAULT_EXCLUDED = ['COSIT', 'COLEC', 'ITVC'];
+
+  /** Termes génériques dépriorisés en cas de litige d'appartenance à un thème. */
+  readonly DEFAULT_GENERICS = [
+    'projet', 'projets', 'project', 'infra', 'infrastructure', 'cadrage',
+    'demo', 'demonstration', 'atelier', 'reunion', 'point', 'suivi', 'revue',
+    'comite', 'kickoff', 'cloture', 'jalon', 'chantier', 'dossier', 'divers',
+    'coordination', 'production', 'support',
+  ];
 
   /* ====================================================================== */
   /*  1. Lecture CSV                                                         */
@@ -181,51 +192,86 @@ export class MeetingsImportService {
       const status = get(r, 'status');
       const cancelled = this.isCancelled(status, subject);
 
-      const theme = this.extractTheme(subject, description, excluded);
-
       return {
         subject, organizer, description, required, optional,
         start: date, dayISO, time, durationMin, status, cancelled,
-        themeKey: theme.key, themeLabel: theme.label, themeFromFallback: theme.fallback,
+        themeKey: '', themeLabel: '', themeFromFallback: true,
       } as Meeting;
     });
 
-    this.reassignThemes(meetings, excluded, opts.aliases ?? []);
+    this.assignThemes(meetings, excluded, opts.aliases ?? [],
+      (opts.generics ?? this.DEFAULT_GENERICS));
     return meetings;
   }
 
   /**
-   * Rattachement « large » (2ᵉ passe sur tout le jeu) :
-   *  - alias : une désignation libre présente dans le sujet/description rattache
-   *    la réunion au code indiqué (ex. « Phénix » → PROJ) — prioritaire ;
-   *  - sinon, pour une réunion sans code majuscule (repli mot-clé), si un code
-   *    connu ailleurs apparaît en toutes lettres (ex. « proj » en minuscules),
-   *    elle est rattachée à ce code.
+   * Affecte à CHAQUE réunion un thème unique (donc jamais compté dans deux
+   * thèmes). Quand plusieurs thèmes sont possibles, on retient le plus pertinent
+   * par un score, et les **termes génériques** (projet, infra, cadrage, démo…)
+   * sont dépriorisés : ils ne l'emportent jamais sur un vrai thème, mais restent
+   * utilisables en dernier recours.
+   *
+   * Pertinence (score décroissant) :
+   *   alias explicite ≫ code majuscule dans le sujet (4 lettres privilégié) >
+   *   code dans la description > code connu écrit en minuscules > mot-clé.
+   * Départage : fréquence du code dans tout le jeu, puis proximité de 4 lettres,
+   * puis ordre alphabétique (déterministe).
    */
-  private reassignThemes(meetings: Meeting[], excluded: Set<string>, aliases: { term: string; code: string }[]): void {
-    const known = new Set<string>();
-    for (const m of meetings) if (!m.themeFromFallback && !m.themeKey.startsWith('kw:')) known.add(m.themeKey);
+  private assignThemes(
+    meetings: Meeting[], excluded: Set<string>,
+    aliases: { term: string; code: string }[], generics: string[],
+  ): void {
+    const gi = new Set(generics.map(g => this.normalize(g)).filter(Boolean));
+    const codesOf = (s: string) => (s.match(/\b[A-Z]{3,6}\b/g) ?? []).filter(t => !excluded.has(t));
+
+    // Fréquence des codes sur tout le jeu (établissement du thème).
+    const freq = new Map<string, number>();
+    for (const m of meetings) {
+      for (const c of new Set(codesOf(m.subject + ' ' + m.description)))
+        freq.set(c, (freq.get(c) ?? 0) + 1);
+    }
+    const known = [...freq.keys()];
 
     const normAliases = aliases
       .filter(a => a.term?.trim() && a.code?.trim())
       .map(a => ({ term: this.normalize(a.term), code: a.code.toUpperCase().trim() }));
 
     for (const m of meetings) {
-      const hay = this.normalize(m.subject + ' ' + m.description);
+      const subj = m.subject || '', desc = m.description || '';
+      const hay = this.normalize(subj + ' ' + desc);
+      const subjCodes = codesOf(subj), descCodes = codesOf(desc);
+      const cands: { key: string; label: string; score: number; fallback: boolean }[] = [];
+      const push = (key: string, label: string, score: number, fallback: boolean) =>
+        cands.push({ key, label, score, fallback });
 
-      const alias = normAliases.find(a => hay.includes(a.term));
-      if (alias && !excluded.has(alias.code)) {
-        m.themeKey = alias.code; m.themeLabel = alias.code; m.themeFromFallback = false;
-        continue;
+      for (const a of normAliases) if (!excluded.has(a.code) && a.term && hay.includes(a.term)) push(a.code, a.code, 1000, false);
+      for (const c of subjCodes) push(c, c, c.length === 4 ? 100 : 80, false);
+      for (const c of descCodes) push(c, c, c.length === 4 ? 60 : 50, false);
+      for (const c of known) {                                   // occurrence en minuscules
+        if (subjCodes.includes(c) || descCodes.includes(c)) continue;
+        if (new RegExp('\\b' + c.toLowerCase() + '\\b').test(hay)) push(c, c, c.length === 4 ? 55 : 45, false);
       }
-      if (m.themeFromFallback) {
-        for (const code of known) {
-          if (new RegExp('\\b' + code.toLowerCase() + '\\b').test(hay)) {
-            m.themeKey = code; m.themeLabel = code; m.themeFromFallback = false;
-            break;
-          }
-        }
+      const kwS = this.keywordFrom(subj, excluded, gi);
+      if (kwS) push('kw:' + this.normalize(kwS), kwS, gi.has(this.normalize(kwS)) ? 6 : 30, true);
+      const kwD = this.keywordFrom(desc, excluded, gi);
+      if (kwD) push('kw:' + this.normalize(kwD), kwD, gi.has(this.normalize(kwD)) ? 5 : 20, true);
+
+      // Dépriorisation des candidats génériques (y compris un code générique).
+      for (const c of cands) if (gi.has(this.normalize(c.label))) c.score = Math.min(c.score, 8);
+
+      let best: typeof cands[number] | null = null;
+      for (const c of cands) {
+        if (!best) { best = c; continue; }
+        if (c.score !== best.score) { if (c.score > best.score) best = c; continue; }
+        const fc = freq.get(c.key) ?? 0, fb = freq.get(best.key) ?? 0;
+        if (fc !== fb) { if (fc > fb) best = c; continue; }
+        const dc = Math.abs(c.label.length - 4), db = Math.abs(best.label.length - 4);
+        if (dc !== db) { if (dc < db) best = c; continue; }
+        if (c.key < best.key) best = c;
       }
+
+      if (best) { m.themeKey = best.key; m.themeLabel = best.label; m.themeFromFallback = best.fallback; }
+      else { m.themeKey = '__nc__'; m.themeLabel = 'Non classé'; m.themeFromFallback = true; }
     }
   }
 
@@ -279,23 +325,9 @@ export class MeetingsImportService {
   /*  4. Extraction du thème                                                 */
   /* ====================================================================== */
 
-  extractTheme(subject: string, description: string, excluded: Set<string>):
-    { key: string; label: string; fallback: boolean } {
-    const fromSubject = this.pickCode(subject, excluded);
-    const code = fromSubject ?? this.pickCode(description, excluded);
-    if (code) return { key: code, label: code, fallback: false };
-
-    const kw = this.keywordFrom(subject, excluded) || this.keywordFrom(description, excluded);
-    if (kw) return { key: 'kw:' + this.normalize(kw), label: kw, fallback: true };
-    return { key: '__nc__', label: 'Non classé', fallback: true };
-  }
-
-  /** Premier code majuscule exploitable (3–6 lettres), hors génériques, 4 lettres privilégié. */
-  private pickCode(text: string, excluded: Set<string>): string | null {
-    const tokens = (text.match(/\b[A-Z]{3,6}\b/g) ?? []).filter(t => !excluded.has(t));
-    if (tokens.length === 0) return null;
-    return tokens.find(t => t.length === 4) ?? tokens[0]!;
-  }
+  /* ====================================================================== */
+  /*  4. Mot-clé de repli                                                    */
+  /* ====================================================================== */
 
   private static readonly STOPWORDS = new Set([
     'reunion', 'meeting', 'call', 'point', 'comite', 'comit', 'hebdo', 'weekly', 'mensuel',
@@ -303,17 +335,20 @@ export class MeetingsImportService {
     'avec', 'pour', 'sur', 'les', 'des', 'une', 'the', 'and', 'and',
   ]);
 
-  /** Mot-clé de repli : le mot significatif le plus long du sujet. */
-  private keywordFrom(text: string, excluded: Set<string>): string | null {
+  /** Mot-clé de repli : le plus long mot significatif, en privilégiant un mot
+   *  NON générique ; à défaut (que des mots génériques), le plus long générique. */
+  private keywordFrom(text: string, excluded: Set<string>, generics: Set<string>): string | null {
     const words = (text || '').split(/[^A-Za-zÀ-ÿ0-9]+/).filter(Boolean);
-    let best: string | null = null;
+    let bestNon: string | null = null, bestGen: string | null = null;
     for (const w of words) {
       if (w.length < 4) continue;
       if (excluded.has(w.toUpperCase())) continue;
       const n = this.normalize(w);
       if (MeetingsImportService.STOPWORDS.has(n)) continue;
-      if (!best || w.length > best.length) best = w;
+      if (generics.has(n)) { if (!bestGen || w.length > bestGen.length) bestGen = w; }
+      else { if (!bestNon || w.length > bestNon.length) bestNon = w; }
     }
+    const best = bestNon ?? bestGen;
     return best ? best.charAt(0).toUpperCase() + best.slice(1).toLowerCase() : null;
   }
 
