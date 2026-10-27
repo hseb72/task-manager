@@ -14,6 +14,8 @@ export type ColKey =
 export type ColumnMap = Partial<Record<ColKey, number>>;  // clé → index de colonne
 
 export interface Meeting {
+  /** Identifiant stable (indice de ligne) pour cibler une réunion dans l'UI. */
+  id: number;
   subject: string;
   organizer: string;
   description: string;
@@ -185,7 +187,7 @@ export class MeetingsImportService {
     // colonne de participants est mappée (sinon l'info n'existe pas dans l'export).
     const attendeesKnown = map.required !== undefined || map.optional !== undefined;
 
-    const meetings = rows.map(r => {
+    const meetings = rows.map((r, i) => {
       const subject = get(r, 'subject');
       const description = get(r, 'description');
       const organizer = get(r, 'organizer');
@@ -202,6 +204,7 @@ export class MeetingsImportService {
         && required.length === 0 && optional.length === 0;
 
       return {
+        id: i,
         subject, organizer, description, required, optional,
         start: date, dayISO, time, durationMin, status, cancelled, personal,
         themeKey: '', themeLabel: '', themeFromFallback: true,
@@ -379,6 +382,25 @@ export class MeetingsImportService {
     'annuel', 'annuelle', 'quotidien', 'quotidienne', 'biweekly', 'monthly',
     'quarterly', 'periodique', 'recurrent', 'recurrente', 'reguliere', 'regulier',
   ]);
+
+  /** Mots « cliquables » d'une réunion (objet puis description) pour proposer
+   *  d'en prioriser un comme thème. On retient les mots d'au moins 3 caractères,
+   *  on écarte les mots vides, et on dédoublonne (sans accent/casse). */
+  candidateWords(m: Meeting): string[] {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const src of [m.subject, m.description]) {
+      for (const w0 of (src || '').split(/[^A-Za-zÀ-ÿ0-9]+/)) {
+        const w = w0.trim();
+        if (w.length < 3) continue;
+        const n = this.normalize(w);
+        if (!n || MeetingsImportService.STOPWORDS.has(n) || seen.has(n)) continue;
+        seen.add(n);
+        out.push(w);
+      }
+    }
+    return out;
+  }
 
   /** Mot-clé de repli : le plus long mot significatif, en privilégiant un mot
    *  NON générique ; à défaut (que des mots génériques), le plus long générique. */

@@ -56,3 +56,25 @@
   vertical-align: middle;
 }
 .badge.ok { color: #2f6b3a; border-color: #c8dccb; background: rgba(47, 107, 58, 0.06); }
+
+/* Reclassement d'une réunion */
+.btn.ghost { border-color: transparent; background: transparent; color: var(--ink-mute); }
+.btn.ghost:hover { border-color: var(--line); color: var(--ink); background: var(--bg); }
+.theme-row td .btn, .data-table.nested .btn { font-size: 0.74rem; }
+tr.row-active > td { background: var(--bg); }
+.reclass-row > td { background: var(--bg); border-top: none; padding: 0.4rem 0.6rem 0.7rem; }
+.reclass { border-left: 3px solid var(--accent); padding: 0.4rem 0 0.4rem 0.7rem; }
+.reclass-line { display: block; font-size: 0.82rem; margin-bottom: 0.5rem; }
+.reclass-line input[type="checkbox"] { vertical-align: middle; margin-right: 0.3rem; }
+.chips { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.chip {
+  font-size: 0.78rem;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-alt);
+  color: var(--ink);
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }

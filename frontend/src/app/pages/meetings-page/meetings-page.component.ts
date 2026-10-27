@@ -34,6 +34,12 @@ export class MeetingsPageComponent {
   synthesis = signal<ThemeSynthesis[]>([]);
   expanded = signal<Set<string>>(new Set());
 
+  /* Reclassement d'une réunion depuis le détail d'un thème. */
+  reclassOpen = signal<number | null>(null);   // id de la réunion dont le panneau est ouvert
+  reclassExclude = signal<boolean>(false);      // exclure le code courant
+  reclassWord = signal<string>('');             // mot à prioriser (alias)
+  reclassCode = signal<string>('');             // code cible optionnel pour l'alias
+
   readonly cols: { key: ColKey; label: string; hint?: string }[] = [
     { key: 'subject',     label: 'Sujet (titre)' },
     { key: 'organizer',   label: 'Organisateur' },
@@ -128,7 +134,7 @@ export class MeetingsPageComponent {
     const ms = this.svc.buildMeetings(this.rows(), this.map(), { excluded, aliases, generics });
     this.meetings.set(ms);
     this.synthesis.set(this.svc.synthesize(ms));
-    this.expanded.set(new Set());
+    // On conserve les thèmes dépliés (utile lors d'un reclassement/relance).
     this.step.set('result');
   }
 
@@ -138,6 +144,46 @@ export class MeetingsPageComponent {
 
   /** Revient à l'étape de paramétrage en conservant l'upload et les réglages. */
   backToSettings() { this.error.set(null); this.step.set('map'); }
+
+  /* ------------------------------------------------------------------ */
+  /*  Reclassement d'une réunion mal classée                             */
+  /* ------------------------------------------------------------------ */
+
+  /** Code du thème courant d'une réunion (null si c'est un mot-clé de repli). */
+  codeOf(m: Meeting): string | null { return m.themeFromFallback ? null : m.themeKey; }
+
+  /** Mots cliquables (objet + description) proposés pour prioriser un thème. */
+  words(m: Meeting): string[] { return this.svc.candidateWords(m); }
+
+  openReclass(m: Meeting) {
+    if (this.reclassOpen() === m.id) { this.reclassOpen.set(null); return; }
+    this.reclassOpen.set(m.id);
+    this.reclassExclude.set(false);
+    this.reclassWord.set('');
+    this.reclassCode.set('');
+  }
+  isReclassOpen(m: Meeting): boolean { return this.reclassOpen() === m.id; }
+  pickWord(w: string) { this.reclassWord.set(this.reclassWord() === w ? '' : w); }
+
+  /** Applique l'exclusion et/ou la priorisation choisies, puis relance l'analyse. */
+  applyReclass(m: Meeting) {
+    const code = this.codeOf(m);
+    if (this.reclassExclude() && code) {
+      const cur = this.excludedText().split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+      if (!cur.some(c => c.toUpperCase() === code.toUpperCase())) cur.push(code);
+      this.excludedText.set(cur.join(', '));
+    }
+    const word = this.reclassWord().trim();
+    if (word) {
+      const target = (this.reclassCode().trim() || word).toUpperCase().replace(/\s+/g, '');
+      const line = `${word} = ${target}`;
+      const existing = this.aliasesText().split(/\n+/).map(s => s.trim()).filter(Boolean);
+      if (!existing.some(l => l.toLowerCase() === line.toLowerCase())) existing.push(line);
+      this.aliasesText.set(existing.join('\n'));
+    }
+    this.reclassOpen.set(null);
+    this.analyze();   // recalcule avec les paramètres mis à jour, reste sur la synthèse
+  }
 
   toggleExpand(key: string) {
     const s = new Set(this.expanded());

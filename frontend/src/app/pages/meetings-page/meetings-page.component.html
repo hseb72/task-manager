@@ -161,17 +161,66 @@
               <td colspan="5">
                 <table class="data-table nested">
                   <thead>
-                    <tr><th>Date</th><th>Heure</th><th>Sujet</th><th>Organisateur</th><th style="width: 90px">Durée</th></tr>
+                    <tr><th>Date</th><th>Heure</th><th>Sujet</th><th>Organisateur</th><th style="width: 90px">Durée</th><th style="width: 120px"></th></tr>
                   </thead>
                   <tbody>
-                    @for (m of t.meetings; track $index) {
-                      <tr>
+                    @for (m of t.meetings; track m.id) {
+                      <tr [class.row-active]="isReclassOpen(m)">
                         <td class="mono">{{ m.dayISO || '—' }}</td>
                         <td class="mono">{{ m.time || '—' }}</td>
                         <td>{{ m.subject }}</td>
                         <td class="muted">{{ m.organizer || '—' }}</td>
                         <td>{{ fmt(m.durationMin) }}</td>
+                        <td style="text-align: right">
+                          <button class="btn tight ghost" (click)="openReclass(m)" title="Mal classée ? Ajuster le paramétrage">
+                            {{ isReclassOpen(m) ? '✕' : '⚙ Mal classée ?' }}
+                          </button>
+                        </td>
                       </tr>
+                      @if (isReclassOpen(m)) {
+                        <tr class="reclass-row">
+                          <td></td>
+                          <td colspan="5">
+                            <div class="reclass">
+                              @if (codeOf(m); as code) {
+                                <label class="reclass-line">
+                                  <input type="checkbox" [checked]="reclassExclude()" (change)="reclassExclude.set($any($event.target).checked)">
+                                  Exclure le code <strong>{{ code }}</strong> du regroupement
+                                  <span class="muted">(ce n'est pas un thème, ex. un nom de personne)</span>
+                                </label>
+                              } @else {
+                                <div class="muted reclass-line">Thème actuel déduit d'un mot-clé : <strong>{{ m.themeLabel }}</strong></div>
+                              }
+
+                              <div class="reclass-line">
+                                <div class="muted" style="margin-bottom: 0.25rem">Prioriser un mot de l'objet / la description comme thème :</div>
+                                <div class="chips">
+                                  @for (w of words(m); track w) {
+                                    <button type="button" class="chip" [class.on]="reclassWord() === w" (click)="pickWord(w)">{{ w }}</button>
+                                  }
+                                  @if (words(m).length === 0) { <span class="muted">aucun mot exploitable</span> }
+                                </div>
+                                @if (reclassWord()) {
+                                  <div class="mt-1" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap">
+                                    <span class="muted">Rattacher « {{ reclassWord() }} » au code :</span>
+                                    <input [value]="reclassCode()" (input)="reclassCode.set(v($event))"
+                                           [placeholder]="reclassWord().toUpperCase()" style="width: 160px">
+                                    <span class="muted" style="font-size: 0.76rem">(vide = le mot lui-même)</span>
+                                  </div>
+                                }
+                              </div>
+
+                              <div class="row gap-sm mt-1">
+                                <button class="btn primary tight" (click)="applyReclass(m)"
+                                        [disabled]="!reclassWord() && !(reclassExclude() && codeOf(m))">
+                                  Appliquer et relancer
+                                </button>
+                                <button class="btn tight" (click)="openReclass(m)">Annuler</button>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      }
                     }
                   </tbody>
                 </table>
