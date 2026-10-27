@@ -212,8 +212,9 @@ export class MeetingsImportService {
    * utilisables en dernier recours.
    *
    * Pertinence (score décroissant) :
-   *   alias explicite ≫ code majuscule dans le sujet (4 lettres privilégié) >
-   *   code dans la description > code connu écrit en minuscules > mot-clé.
+   *   alias explicite ≫ code applicatif prioritaire (AP+5 chiffres ou 1+6 chiffres,
+   *   éventuellement [entre crochets]) ≫ code majuscule dans le sujet (4 lettres
+   *   privilégié) > code dans la description > code connu en minuscules > mot-clé.
    * Départage : fréquence du code dans tout le jeu, puis proximité de 4 lettres,
    * puis ordre alphabétique (déterministe).
    */
@@ -223,11 +224,25 @@ export class MeetingsImportService {
   ): void {
     const gi = new Set(generics.map(g => this.normalize(g)).filter(Boolean));
     const codesOf = (s: string) => (s.match(/\b[A-Z]{3,6}\b/g) ?? []).filter(t => !excluded.has(t));
+    // Codes « applicatifs » prioritaires : AP + 5 chiffres, ou 1 + 6 chiffres,
+    // éventuellement entre crochets (ex. [AP01234]). Les crochets sont retirés.
+    const priorityOf = (s: string) => {
+      const out: string[] = [];
+      for (const m of (s ?? '').matchAll(/\[?\b(AP\d{5}|1\d{6})\b\]?/g)) {
+        const code = m[1]!;
+        if (!excluded.has(code)) out.push(code);
+      }
+      return out;
+    };
 
     // Fréquence des codes sur tout le jeu (établissement du thème).
     const freq = new Map<string, number>();
     for (const m of meetings) {
-      for (const c of new Set(codesOf(m.subject + ' ' + m.description)))
+      const all = [
+        ...codesOf(m.subject + ' ' + m.description),
+        ...priorityOf(m.subject + ' ' + m.description),
+      ];
+      for (const c of new Set(all))
         freq.set(c, (freq.get(c) ?? 0) + 1);
     }
     const known = [...freq.keys()];
@@ -245,6 +260,9 @@ export class MeetingsImportService {
         cands.push({ key, label, score, fallback });
 
       for (const a of normAliases) if (!excluded.has(a.code) && a.term && hay.includes(a.term)) push(a.code, a.code, 1000, false);
+      // Codes applicatifs prioritaires (avant les codes à 4 lettres).
+      for (const c of priorityOf(subj)) push(c, c, 200, false);
+      for (const c of priorityOf(desc)) push(c, c, 150, false);
       for (const c of subjCodes) push(c, c, c.length === 4 ? 100 : 80, false);
       for (const c of descCodes) push(c, c, c.length === 4 ? 60 : 50, false);
       for (const c of known) {                                   // occurrence en minuscules
