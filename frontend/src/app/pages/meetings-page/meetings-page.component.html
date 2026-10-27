@@ -115,7 +115,10 @@
       <span class="kpi"><strong>{{ s.themes }}</strong> thèmes</span>
       <span class="kpi"><strong>{{ fmt(s.totalMin) }}</strong> cumulées</span>
       <span class="kpi muted">{{ s.cancelled }} annulée(s)</span>
-      <button class="btn tight" style="margin-left: auto" (click)="exportSynthesis()">⤓ Exporter la synthèse (CSV)</button>
+      @if (s.personal) { <span class="kpi muted">{{ s.personal }} créneau(x) perso</span> }
+      <span style="margin-left: auto"></span>
+      <button class="btn tight" (click)="backToSettings()">↩ Réviser les paramètres</button>
+      <button class="btn tight" (click)="exportSynthesis()">⤓ Exporter la synthèse (CSV)</button>
     </div>
   }
 
@@ -180,7 +183,8 @@
     </table>
     <div class="muted mt-1" style="font-size: 0.78rem">
       Cliquez une ligne pour voir le détail des réunions du thème. Les réunions annulées sont exclues des durées et du top acteurs
-      (elles sont comptées à part). Les acteurs cumulent organisateur, destinataires obligatoires et facultatifs.
+      (elles sont comptées à part). Les créneaux avec un organisateur mais aucun participant (travail personnel réservé) sont
+      exclus du comptage. Les acteurs cumulent organisateur, destinataires obligatoires et facultatifs.
     </div>
   }
 }

@@ -51,8 +51,12 @@ export class MeetingsPageComponent {
   summary = computed(() => {
     const ms = this.meetings();
     const cancelled = ms.filter(m => m.cancelled).length;
-    const totalMin = ms.filter(m => !m.cancelled).reduce((a, m) => a + m.durationMin, 0);
-    return { total: ms.length, active: ms.length - cancelled, cancelled, totalMin, themes: this.synthesis().length };
+    const personal = ms.filter(m => m.personal).length;
+    const totalMin = ms.filter(m => !m.cancelled && !m.personal).reduce((a, m) => a + m.durationMin, 0);
+    return {
+      total: ms.length, active: ms.length - cancelled - personal,
+      cancelled, personal, totalMin, themes: this.synthesis().length,
+    };
   });
 
   /* ------------------------------------------------------------------ */
@@ -131,6 +135,9 @@ export class MeetingsPageComponent {
   /* ------------------------------------------------------------------ */
   /*  Résultat                                                           */
   /* ------------------------------------------------------------------ */
+
+  /** Revient à l'étape de paramétrage en conservant l'upload et les réglages. */
+  backToSettings() { this.error.set(null); this.step.set('map'); }
 
   toggleExpand(key: string) {
     const s = new Set(this.expanded());

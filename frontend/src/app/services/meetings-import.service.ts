@@ -25,6 +25,8 @@ export interface Meeting {
   durationMin: number;
   status: string;
   cancelled: boolean;
+  /** Créneau de travail personnel : un organisateur, aucun participant. Exclu du comptage. */
+  personal: boolean;
   /** Clé de regroupement (code ou mot-clé) et libellé affiché. */
   themeKey: string;
   themeLabel: string;
@@ -179,6 +181,9 @@ export class MeetingsImportService {
   buildMeetings(rows: string[][], map: ColumnMap, opts: ImportOptions): Meeting[] {
     const excluded = new Set((opts.excluded ?? this.DEFAULT_EXCLUDED).map(s => s.toUpperCase().trim()).filter(Boolean));
     const get = (r: string[], k: ColKey) => (map[k] !== undefined ? (r[map[k]!] ?? '').trim() : '');
+    // Peut-on statuer sur l'absence de participants ? Seulement si au moins une
+    // colonne de participants est mappée (sinon l'info n'existe pas dans l'export).
+    const attendeesKnown = map.required !== undefined || map.optional !== undefined;
 
     const meetings = rows.map(r => {
       const subject = get(r, 'subject');
@@ -191,10 +196,14 @@ export class MeetingsImportService {
       const durationMin = this.resolveDuration(r, map, date);
       const status = get(r, 'status');
       const cancelled = this.isCancelled(status, subject);
+      // Créneau personnel réservé : un organisateur, aucun participant (ni
+      // obligatoire ni facultatif). Non pertinent si l'annulation prime.
+      const personal = !cancelled && attendeesKnown && !!organizer
+        && required.length === 0 && optional.length === 0;
 
       return {
         subject, organizer, description, required, optional,
-        start: date, dayISO, time, durationMin, status, cancelled,
+        start: date, dayISO, time, durationMin, status, cancelled, personal,
         themeKey: '', themeLabel: '', themeFromFallback: true,
       } as Meeting;
     });
@@ -395,6 +404,7 @@ export class MeetingsImportService {
   synthesize(meetings: Meeting[]): ThemeSynthesis[] {
     const groups = new Map<string, ThemeSynthesis>();
     for (const m of meetings) {
+      if (m.personal) continue;   // créneaux de travail personnel : hors comptage
       let g = groups.get(m.themeKey);
       if (!g) {
         g = { key: m.themeKey, label: m.themeLabel, fromFallback: m.themeFromFallback,
