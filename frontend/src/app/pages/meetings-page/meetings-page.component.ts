@@ -193,6 +193,7 @@ export class MeetingsPageComponent {
   isExpanded(key: string): boolean { return this.expanded().has(key); }
 
   fmt(min: number): string { return this.svc.formatDuration(min); }
+  fmtDate(d: Date | null): string { return this.svc.formatDate(d); }
   topActorsLabel(t: ThemeSynthesis): string {
     return t.topActors.map(a => `${a.actor} (${a.count})`).join(' · ');
   }
@@ -214,7 +215,8 @@ export class MeetingsPageComponent {
   exportSynthesis() {
     const esc = (v: string) => '"' + String(v ?? '').replace(/"/g, '""') + '"';
     const lines = [
-      ['Thème', 'Type', 'Réunions', 'Durée (min)', 'Durée', 'Annulées', 'Top 5 acteurs'].map(esc).join(';'),
+      ['Thème', 'Type', 'Réunions', 'Durée (min)', 'Durée', 'Annulées',
+       'Première réunion', 'Dernière réunion', 'Top 5 acteurs'].map(esc).join(';'),   // dates
     ];
     for (const t of this.synthesis()) {
       lines.push([
@@ -224,6 +226,8 @@ export class MeetingsPageComponent {
         String(t.totalDurationMin),
         this.fmt(t.totalDurationMin),
         String(t.cancelledCount),
+        this.fmtDate(t.firstStart),
+        this.fmtDate(t.lastStart),
         this.topActorsLabel(t),
       ].map(esc).join(';'));
     }

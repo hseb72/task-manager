@@ -46,6 +46,9 @@ export interface ThemeSynthesis {
   totalDurationMin: number;
   topActors: ActorCount[];    // 5 max
   meetings: Meeting[];        // non annulées
+  /** Début de la première et de la dernière réunion (non annulées) du thème. */
+  firstStart: Date | null;
+  lastStart: Date | null;
 }
 
 export interface ImportOptions {
@@ -430,13 +433,18 @@ export class MeetingsImportService {
       let g = groups.get(m.themeKey);
       if (!g) {
         g = { key: m.themeKey, label: m.themeLabel, fromFallback: m.themeFromFallback,
-              count: 0, cancelledCount: 0, totalDurationMin: 0, topActors: [], meetings: [] };
+              count: 0, cancelledCount: 0, totalDurationMin: 0, topActors: [], meetings: [],
+              firstStart: null, lastStart: null };
         groups.set(m.themeKey, g);
       }
       if (m.cancelled) { g.cancelledCount++; continue; }
       g.count++;
       g.totalDurationMin += m.durationMin;
       g.meetings.push(m);
+      if (m.start) {
+        if (!g.firstStart || m.start < g.firstStart) g.firstStart = m.start;
+        if (!g.lastStart || m.start > g.lastStart) g.lastStart = m.start;
+      }
     }
 
     // Top acteurs (par nombre de réunions non annulées du thème où l'acteur apparaît)
@@ -503,5 +511,12 @@ export class MeetingsImportService {
     if (h && m) return `${h} h ${String(m).padStart(2, '0')}`;
     if (h) return `${h} h`;
     return `${m} min`;
+  }
+
+  /** Formate une date en « jj/mm/aaaa » (chaîne vide si null). */
+  formatDate(d: Date | null): string {
+    if (!d) return '';
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()}`;
   }
 }
