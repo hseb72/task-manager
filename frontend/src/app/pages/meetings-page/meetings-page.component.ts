@@ -25,6 +25,8 @@ export class MeetingsPageComponent {
   rows = signal<string[][]>([]);
   map = signal<ColumnMap>({});
   excludedText = signal<string>('COSIT, COLEC, ITVC');
+  /** Alias « désignation = CODE », séparés par des virgules ou retours ligne. */
+  aliasesText = signal<string>('');
 
   meetings = signal<Meeting[]>([]);
   synthesis = signal<ThemeSynthesis[]>([]);
@@ -112,7 +114,11 @@ export class MeetingsPageComponent {
 
   analyze() {
     const excluded = this.excludedText().split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
-    const ms = this.svc.buildMeetings(this.rows(), this.map(), { excluded });
+    const aliases = this.aliasesText().split(/[,\n;]+/).map(line => {
+      const [term, code] = line.split('=');
+      return { term: (term ?? '').trim(), code: (code ?? '').trim() };
+    }).filter(a => a.term && a.code);
+    const ms = this.svc.buildMeetings(this.rows(), this.map(), { excluded, aliases });
     this.meetings.set(ms);
     this.synthesis.set(this.svc.synthesize(ms));
     this.expanded.set(new Set());

@@ -47,6 +47,8 @@ export interface ThemeSynthesis {
 export interface ImportOptions {
   /** Codes génériques exclus du regroupement (COSIT, COLEC, ITVC…). */
   excluded: string[];
+  /** Alias : une désignation libre (mot/expression) rattachée à un code. */
+  aliases?: { term: string; code: string }[];
 }
 
 export interface ParseResult {
@@ -136,6 +138,10 @@ export class MeetingsImportService {
 
     const find = (syns: string[], exact: boolean) => {
       for (const syn of syns) {
+        // Les synonymes courts (« a », « to », « cc », « de ») ne matchent qu'en
+        // correspondance exacte, jamais en « contient » (sinon ils capturent des
+        // en-têtes comme « Rappel activé »).
+        if (!exact && syn.length < 3) continue;
         for (let i = 0; i < norm.length; i++) {
           if (taken.has(i)) continue;
           if (exact ? norm[i] === syn : norm[i]!.includes(syn)) return i;
@@ -163,7 +169,7 @@ export class MeetingsImportService {
     const excluded = new Set((opts.excluded ?? this.DEFAULT_EXCLUDED).map(s => s.toUpperCase().trim()).filter(Boolean));
     const get = (r: string[], k: ColKey) => (map[k] !== undefined ? (r[map[k]!] ?? '').trim() : '');
 
-    return rows.map(r => {
+    const meetings = rows.map(r => {
       const subject = get(r, 'subject');
       const description = get(r, 'description');
       const organizer = get(r, 'organizer');
@@ -183,6 +189,44 @@ export class MeetingsImportService {
         themeKey: theme.key, themeLabel: theme.label, themeFromFallback: theme.fallback,
       } as Meeting;
     });
+
+    this.reassignThemes(meetings, excluded, opts.aliases ?? []);
+    return meetings;
+  }
+
+  /**
+   * Rattachement « large » (2ᵉ passe sur tout le jeu) :
+   *  - alias : une désignation libre présente dans le sujet/description rattache
+   *    la réunion au code indiqué (ex. « Phénix » → PROJ) — prioritaire ;
+   *  - sinon, pour une réunion sans code majuscule (repli mot-clé), si un code
+   *    connu ailleurs apparaît en toutes lettres (ex. « proj » en minuscules),
+   *    elle est rattachée à ce code.
+   */
+  private reassignThemes(meetings: Meeting[], excluded: Set<string>, aliases: { term: string; code: string }[]): void {
+    const known = new Set<string>();
+    for (const m of meetings) if (!m.themeFromFallback && !m.themeKey.startsWith('kw:')) known.add(m.themeKey);
+
+    const normAliases = aliases
+      .filter(a => a.term?.trim() && a.code?.trim())
+      .map(a => ({ term: this.normalize(a.term), code: a.code.toUpperCase().trim() }));
+
+    for (const m of meetings) {
+      const hay = this.normalize(m.subject + ' ' + m.description);
+
+      const alias = normAliases.find(a => hay.includes(a.term));
+      if (alias && !excluded.has(alias.code)) {
+        m.themeKey = alias.code; m.themeLabel = alias.code; m.themeFromFallback = false;
+        continue;
+      }
+      if (m.themeFromFallback) {
+        for (const code of known) {
+          if (new RegExp('\\b' + code.toLowerCase() + '\\b').test(hay)) {
+            m.themeKey = code; m.themeLabel = code; m.themeFromFallback = false;
+            break;
+          }
+        }
+      }
+    }
   }
 
   /** Découpe une cellule de participants en acteurs (noms ou e-mails). */

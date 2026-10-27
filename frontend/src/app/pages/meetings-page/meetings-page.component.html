@@ -73,6 +73,17 @@
       </div>
     </div>
 
+    <div class="mt-2">
+      <label>Alias de rattachement <span class="muted" style="font-weight: normal">(optionnel)</span></label>
+      <textarea rows="2" [value]="aliasesText()" (input)="aliasesText.set(v($event))"
+                placeholder="Phénix = PROJ&#10;chantier de migration = MIGR"
+                style="width: 100%; max-width: 560px; font-size: 0.82rem"></textarea>
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        Rattache une désignation libre à un code (une par ligne, <code>désignation = CODE</code>).
+        Le même code écrit en minuscules dans un sujet est rattaché automatiquement.
+      </div>
+    </div>
+
     @if (!subjectMapped) {
       <div class="muted mt-2" style="color: var(--danger); font-size: 0.82rem">Associez au moins la colonne « Sujet » pour continuer.</div>
     }
