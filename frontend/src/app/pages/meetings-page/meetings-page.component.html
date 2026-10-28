@@ -64,6 +64,23 @@
       }
     </div>
 
+    <div class="config-bar mt-2">
+      <strong style="font-size: 0.85rem">Paramétrage de classement</strong>
+      <div class="row gap-sm mt-1" style="flex-wrap: wrap; align-items: center">
+        <select [ngModel]="configName()" (ngModelChange)="applyConfig($event)" style="min-width: 180px">
+          <option value="">— paramétrage enregistré —</option>
+          @for (n of configNames(); track n) { <option [value]="n">{{ n }}</option> }
+        </select>
+        <input [value]="configName()" (input)="configName.set(v($event))" placeholder="nom du paramétrage" style="width: 200px">
+        <button class="btn tight" (click)="saveConfig()" [disabled]="!configName().trim()">💾 Enregistrer</button>
+        <button class="btn tight" (click)="deleteConfig()" [disabled]="!configs()[configName().trim()]">🗑 Supprimer</button>
+      </div>
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        Enregistrez les réglages ci-dessous (exclusions, alias, génériques, thèmes, récurrence, titres personnels)
+        sous un nom pour les réappliquer aux prochains imports. Sélectionnez un paramétrage pour le charger.
+      </div>
+    </div>
+
     <div class="mt-2">
       <label>Codes génériques exclus du regroupement</label>
       <input [value]="excludedText()" (input)="excludedText.set(v($event))"

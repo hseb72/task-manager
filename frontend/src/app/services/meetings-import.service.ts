@@ -604,7 +604,12 @@ export class MeetingsImportService {
       g.topActors = [...counts.values()].sort((a, b) => b.count - a.count).slice(0, 5);
     }
 
-    return [...groups.values()].sort((a, b) => b.totalDurationMin - a.totalDurationMin);
+    // Tri : séries récurrentes d'abord (alphabétique), puis le reste (alphabétique).
+    return [...groups.values()].sort((a, b) => {
+      const ra = a.kind === 'recurring' ? 0 : 1, rb = b.kind === 'recurring' ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
+    });
   }
 
   /* ====================================================================== */

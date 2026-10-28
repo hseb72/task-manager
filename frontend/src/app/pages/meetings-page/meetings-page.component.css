@@ -82,3 +82,4 @@ tr.row-active > td { background: var(--bg); }
 .reclass-fields { display: flex; gap: 0.8rem; flex-wrap: wrap; }
 .reclass-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; }
 .reclass-field input { width: 220px; max-width: 100%; }
+.config-bar { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem 0.8rem; background: var(--bg-alt); }

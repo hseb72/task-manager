@@ -5,6 +5,16 @@ import {
   MeetingsImportService, ColKey, ColumnMap, Meeting, ThemeSynthesis, ThemeKind,
 } from '../../services/meetings-import.service';
 
+/** Paramétrage de classement sauvegardable (réutilisable d'un fichier à l'autre). */
+interface SavedConfig {
+  excluded: string;
+  aliases: string;
+  generics: string;
+  themes: string;
+  recurrenceMin: number;
+  personalTitles: string;
+}
+
 @Component({
   selector: 'app-meetings-page',
   standalone: true,
@@ -15,6 +25,8 @@ import {
 })
 export class MeetingsPageComponent {
   private svc = inject(MeetingsImportService);
+
+  constructor() { this.loadConfigs(); }
 
   step = signal<'upload' | 'map' | 'result'>('upload');
   error = signal<string | null>(null);
@@ -35,6 +47,11 @@ export class MeetingsPageComponent {
   recurrenceMin = signal<number>(3);
   /** Titres de réunions marquées « personnelles » (une par ligne). */
   personalTitlesText = signal<string>('');
+
+  /* Paramétrages nommés, persistés dans le navigateur (localStorage). */
+  private readonly STORE_KEY = 'meetings.configs.v1';
+  configs = signal<Record<string, SavedConfig>>({});
+  configName = signal<string>('');
 
   meetings = signal<Meeting[]>([]);
   synthesis = signal<ThemeSynthesis[]>([]);
@@ -154,6 +171,61 @@ export class MeetingsPageComponent {
 
   /** Revient à l'étape de paramétrage en conservant l'upload et les réglages. */
   backToSettings() { this.error.set(null); this.step.set('map'); }
+
+  /* ------------------------------------------------------------------ */
+  /*  Paramétrages nommés (persistés dans le navigateur)                 */
+  /* ------------------------------------------------------------------ */
+
+  configNames(): string[] {
+    return Object.keys(this.configs()).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+  }
+
+  private loadConfigs() {
+    try {
+      const raw = localStorage.getItem(this.STORE_KEY);
+      if (raw) this.configs.set(JSON.parse(raw) as Record<string, SavedConfig>);
+    } catch { /* stockage indisponible : on ignore */ }
+  }
+  private persistConfigs(obj: Record<string, SavedConfig>) {
+    this.configs.set(obj);
+    try { localStorage.setItem(this.STORE_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
+  }
+
+  private currentConfig(): SavedConfig {
+    return {
+      excluded: this.excludedText(), aliases: this.aliasesText(), generics: this.genericsText(),
+      themes: this.themesText(), recurrenceMin: this.recurrenceMin(), personalTitles: this.personalTitlesText(),
+    };
+  }
+
+  /** Enregistre le paramétrage courant sous le nom saisi (écrase si existant). */
+  saveConfig() {
+    const name = this.configName().trim();
+    if (!name) return;
+    this.persistConfigs({ ...this.configs(), [name]: this.currentConfig() });
+  }
+
+  /** Applique un paramétrage enregistré aux champs courants. */
+  applyConfig(name: string) {
+    const c = this.configs()[name];
+    if (!c) return;
+    this.configName.set(name);
+    this.excludedText.set(c.excluded ?? '');
+    this.aliasesText.set(c.aliases ?? '');
+    this.genericsText.set(c.generics ?? '');
+    this.themesText.set(c.themes ?? '');
+    this.recurrenceMin.set(c.recurrenceMin ?? 3);
+    this.personalTitlesText.set(c.personalTitles ?? '');
+  }
+
+  /** Supprime le paramétrage enregistré sélectionné. */
+  deleteConfig() {
+    const name = this.configName().trim();
+    if (!name || !this.configs()[name]) return;
+    const { [name]: _removed, ...rest } = this.configs();
+    this.persistConfigs(rest);
+    this.configName.set('');
+  }
 
   /* ------------------------------------------------------------------ */
   /*  Reclassement d'une réunion mal classée                             */
