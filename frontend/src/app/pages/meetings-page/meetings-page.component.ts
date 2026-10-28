@@ -33,6 +33,8 @@ export class MeetingsPageComponent {
   themesText = signal<string>('');
   /** Occurrences min. d'un même titre pour une série récurrente (0 = désactivé). */
   recurrenceMin = signal<number>(3);
+  /** Titres de réunions marquées « personnelles » (une par ligne). */
+  personalTitlesText = signal<string>('');
 
   meetings = signal<Meeting[]>([]);
   synthesis = signal<ThemeSynthesis[]>([]);
@@ -61,10 +63,10 @@ export class MeetingsPageComponent {
   summary = computed(() => {
     const ms = this.meetings();
     const cancelled = ms.filter(m => m.cancelled).length;
-    const personal = ms.filter(m => m.personal).length;
+    const personal = ms.filter(m => m.personal && !m.cancelled).length;
     const totalMin = ms.filter(m => !m.cancelled && !m.personal).reduce((a, m) => a + m.durationMin, 0);
     return {
-      total: ms.length, active: ms.length - cancelled - personal,
+      total: ms.length, active: ms.filter(m => !m.cancelled && !m.personal).length,
       cancelled, personal, totalMin, themes: this.synthesis().length,
     };
   });
@@ -137,8 +139,9 @@ export class MeetingsPageComponent {
     const generics = this.genericsText().split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
     const themes = this.themesText().split(/\n+/).map(s => s.trim()).filter(Boolean);
     const recurrenceMin = Math.max(0, Math.floor(this.recurrenceMin() || 0));
+    const personalTitles = this.personalTitlesText().split(/\n+/).map(s => s.trim()).filter(Boolean);
     const ms = this.svc.buildMeetings(this.rows(), this.map(),
-      { excluded, aliases, generics, themes, recurrenceMin });
+      { excluded, aliases, generics, themes, recurrenceMin, personalTitles });
     this.meetings.set(ms);
     this.synthesis.set(this.svc.synthesize(ms));
     // On conserve les thèmes dépliés (utile lors d'un reclassement/relance).
@@ -170,7 +173,26 @@ export class MeetingsPageComponent {
     this.reclassCode.set('');
   }
   isReclassOpen(m: Meeting): boolean { return this.reclassOpen() === m.id; }
-  pickWord(w: string) { this.reclassWord.set(this.reclassWord() === w ? '' : w); }
+
+  /** Un clic sur une pilule ajoute le mot au champ « chaîne détectée ». */
+  pickWord(w: string) {
+    const cur = this.reclassWord().trim();
+    const words = cur ? cur.split(/\s+/) : [];
+    if (words.some(x => x.toLowerCase() === w.toLowerCase())) return;   // déjà présent
+    this.reclassWord.set((cur ? cur + ' ' : '') + w);
+  }
+
+  /** Marque la réunion comme « personnelle » (par son titre) et relance. */
+  markPersonal(m: Meeting) {
+    const title = (m.subject || '').replace(/^\s*annul[eé]e?\s*:\s*/i, '').trim();
+    if (title) {
+      const existing = this.personalTitlesText().split(/\n+/).map(s => s.trim()).filter(Boolean);
+      if (!existing.some(l => l.toLowerCase() === title.toLowerCase())) existing.push(title);
+      this.personalTitlesText.set(existing.join('\n'));
+    }
+    this.reclassOpen.set(null);
+    this.analyze();
+  }
 
   /** Applique l'exclusion et/ou la priorisation choisies, puis relance l'analyse. */
   applyReclass(m: Meeting) {
@@ -180,10 +202,10 @@ export class MeetingsPageComponent {
       if (!cur.some(c => c.toUpperCase() === code.toUpperCase())) cur.push(code);
       this.excludedText.set(cur.join(', '));
     }
-    const word = this.reclassWord().trim();
-    if (word) {
-      const target = (this.reclassCode().trim() || word).toUpperCase().replace(/\s+/g, '');
-      const line = `${word} = ${target}`;
+    const term = this.reclassWord().trim();        // champ 1 : chaîne détectée
+    if (term) {
+      const theme = (this.reclassCode().trim() || term);   // champ 2 : thème de regroupement
+      const line = `${term} = ${theme}`;
       const existing = this.aliasesText().split(/\n+/).map(s => s.trim()).filter(Boolean);
       if (!existing.some(l => l.toLowerCase() === line.toLowerCase())) existing.push(line);
       this.aliasesText.set(existing.join('\n'));

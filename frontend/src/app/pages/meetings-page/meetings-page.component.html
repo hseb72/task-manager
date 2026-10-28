@@ -119,6 +119,17 @@
       </div>
     </div>
 
+    <div class="mt-2">
+      <label>Réunions personnelles <span class="muted" style="font-weight: normal">(titres, une par ligne)</span></label>
+      <textarea rows="2" [value]="personalTitlesText()" (input)="personalTitlesText.set(v($event))"
+                placeholder="Créneau de travail&#10;Focus perso"
+                style="width: 100%; max-width: 560px; font-size: 0.82rem"></textarea>
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        Ces titres sont traités comme des créneaux réservés et exclus du comptage (comme les créneaux
+        avec organisateur mais sans participant). Alimenté aussi par le bouton « Personnel » du détail.
+      </div>
+    </div>
+
     @if (!subjectMapped) {
       <div class="muted mt-2" style="color: var(--danger); font-size: 0.82rem">Associez au moins la colonne « Sujet » pour continuer.</div>
     }
@@ -215,37 +226,50 @@
                           <td></td>
                           <td colspan="5">
                             <div class="reclass">
+                              <div class="reclass-line" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap">
+                                <span class="muted">Thème actuel ({{ kindLabel(m.themeKind) }}) : <strong>{{ m.themeLabel }}</strong></span>
+                                <button class="btn tight" (click)="markPersonal(m)" title="Marquer ce titre comme créneau personnel (exclu du comptage)">
+                                  👤 Personnel
+                                </button>
+                              </div>
+
                               @if (codeOf(m); as code) {
                                 <label class="reclass-line">
                                   <input type="checkbox" [checked]="reclassExclude()" (change)="reclassExclude.set($any($event.target).checked)">
                                   Exclure le code <strong>{{ code }}</strong> du regroupement
                                   <span class="muted">(ce n'est pas un thème, ex. un nom de personne)</span>
                                 </label>
-                              } @else {
-                                <div class="muted reclass-line">Thème actuel ({{ kindLabel(m.themeKind) }}) : <strong>{{ m.themeLabel }}</strong></div>
                               }
 
                               <div class="reclass-line">
-                                <div class="muted" style="margin-bottom: 0.25rem">Prioriser un mot de l'objet / la description comme thème :</div>
+                                <div class="muted" style="margin-bottom: 0.3rem">Prioriser une chaîne comme thème :</div>
                                 <div class="chips">
                                   @for (w of words(m); track w) {
-                                    <button type="button" class="chip" [class.on]="reclassWord() === w" (click)="pickWord(w)">{{ w }}</button>
+                                    <button type="button" class="chip" (click)="pickWord(w)">+ {{ w }}</button>
                                   }
                                   @if (words(m).length === 0) { <span class="muted">aucun mot exploitable</span> }
                                 </div>
-                                @if (reclassWord()) {
-                                  <div class="mt-1" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap">
-                                    <span class="muted">Rattacher « {{ reclassWord() }} » au code :</span>
+                                <div class="mt-1 reclass-fields">
+                                  <label class="reclass-field">
+                                    <span class="muted">Chaîne détectée <span style="font-size: 0.76rem">(un ou plusieurs mots)</span></span>
+                                    <input [value]="reclassWord()" (input)="reclassWord.set(v($event))"
+                                           placeholder="ex. chantier de migration">
+                                  </label>
+                                  <label class="reclass-field">
+                                    <span class="muted">Thème de regroupement</span>
                                     <input [value]="reclassCode()" (input)="reclassCode.set(v($event))"
-                                           [placeholder]="reclassWord().toUpperCase()" style="width: 160px">
-                                    <span class="muted" style="font-size: 0.76rem">(vide = le mot lui-même)</span>
-                                  </div>
-                                }
+                                           [placeholder]="reclassWord().trim() || 'ex. MIGR'">
+                                  </label>
+                                </div>
+                                <div class="muted mt-1" style="font-size: 0.76rem">
+                                  La chaîne détectée (insensible à la casse/accents) rattache les réunions au thème indiqué.
+                                  Thème vide = la chaîne elle-même.
+                                </div>
                               </div>
 
                               <div class="row gap-sm mt-1">
                                 <button class="btn primary tight" (click)="applyReclass(m)"
-                                        [disabled]="!reclassWord() && !(reclassExclude() && codeOf(m))">
+                                        [disabled]="!reclassWord().trim() && !(reclassExclude() && codeOf(m))">
                                   Appliquer et relancer
                                 </button>
                                 <button class="btn tight" (click)="openReclass(m)">Annuler</button>

@@ -79,3 +79,6 @@ tr.row-active > td { background: var(--bg); }
 }
 .chip:hover { border-color: var(--accent); }
 .chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.reclass-fields { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+.reclass-field { display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.8rem; }
+.reclass-field input { width: 220px; max-width: 100%; }

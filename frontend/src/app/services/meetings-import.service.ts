@@ -71,6 +71,9 @@ export interface ImportOptions {
   /** Détection des séries récurrentes : nombre minimal d'occurrences d'un même
    *  titre pour en faire un thème (0 = désactivé, défaut DEFAULT_RECURRENCE_MIN). */
   recurrenceMin?: number;
+  /** Titres de réunions marqués « personnels » : toutes leurs occurrences sont
+   *  traitées comme des créneaux réservés et exclues du comptage. */
+  personalTitles?: string[];
 }
 
 export interface ParseResult {
@@ -204,6 +207,9 @@ export class MeetingsImportService {
     // Peut-on statuer sur l'absence de participants ? Seulement si au moins une
     // colonne de participants est mappée (sinon l'info n'existe pas dans l'export).
     const attendeesKnown = map.required !== undefined || map.optional !== undefined;
+    // Titres explicitement marqués « personnels » (comparés via la clé de série).
+    const personalTitles = new Set((opts.personalTitles ?? [])
+      .map(t => this.seriesKey(t)).filter(Boolean));
 
     const meetings = rows.map((r, i) => {
       const subject = get(r, 'subject');
@@ -216,10 +222,11 @@ export class MeetingsImportService {
       const durationMin = this.resolveDuration(r, map, date);
       const status = get(r, 'status');
       const cancelled = this.isCancelled(status, subject);
-      // Créneau personnel réservé : un organisateur, aucun participant (ni
-      // obligatoire ni facultatif). Non pertinent si l'annulation prime.
-      const personal = !cancelled && attendeesKnown && !!organizer
+      // Créneau personnel : soit le titre est marqué « personnel » par
+      // l'utilisateur, soit un organisateur sans aucun participant (détection auto).
+      const autoPersonal = attendeesKnown && !!organizer
         && required.length === 0 && optional.length === 0;
+      const personal = !cancelled && (personalTitles.has(this.seriesKey(subject)) || autoPersonal);
 
       return {
         id: i,
@@ -292,9 +299,19 @@ export class MeetingsImportService {
     }
     const known = [...freq.keys()];
 
+    // Alias « chaîne détectée = thème ». Le thème est conservé tel quel ; un seul
+    // mot est traité comme un code (majuscules), une expression comme un thème.
     const normAliases = aliases
       .filter(a => a.term?.trim() && a.code?.trim())
-      .map(a => ({ term: this.normalize(a.term), code: a.code.toUpperCase().trim() }));
+      .map(a => {
+        const term = this.normalize(a.term);
+        const raw = a.code.trim();
+        const single = /^[\p{L}\p{N}]+$/u.test(raw);
+        const label = single ? raw.toUpperCase() : raw;
+        const key = single ? raw.toUpperCase() : 'theme:' + this.normalize(raw);
+        const kind: ThemeKind = single ? 'code' : 'defined';
+        return { term, label, key, kind };
+      });
 
     for (const m of meetings) {
       const rec = recurring.get(m.id);
@@ -312,16 +329,19 @@ export class MeetingsImportService {
         || (!!kwS && !gi.has(this.normalize(kwS)));
       const descBoost = !subjHasTheme;
 
-      const cands: { key: string; label: string; score: number; fallback: boolean }[] = [];
-      const push = (key: string, label: string, score: number, fallback: boolean) =>
-        cands.push({ key, label, score, fallback });
+      const cands: { key: string; label: string; score: number; fallback: boolean; kind: ThemeKind }[] = [];
+      const push = (key: string, label: string, score: number, fallback: boolean, kind: ThemeKind = 'code') =>
+        cands.push({ key, label, score, fallback, kind });
 
       // Intention explicite de l'utilisateur (thèmes définis, alias) : au sommet,
       // au-dessus même d'une série récurrente, pour permettre une correction.
-      for (const t of defined) if (hay.includes(t.norm)) push('theme:' + t.norm, t.label, 2000, false);
-      for (const a of normAliases) if (!excluded.has(a.code) && a.term && hay.includes(a.term)) push(a.code, a.code, 2000, false);
+      for (const t of defined) if (hay.includes(t.norm)) push('theme:' + t.norm, t.label, 2000, false, 'defined');
+      for (const a of normAliases) {
+        if (a.kind === 'code' && excluded.has(a.key)) continue;
+        if (a.term && hay.includes(a.term)) push(a.key, a.label, 2000, false, a.kind);
+      }
       // Série récurrente : thème = titre complet, prioritaire sur les codes/mots-clés.
-      if (rec) push(rec.key, rec.label, 1500, false);
+      if (rec) push(rec.key, rec.label, 1500, false, 'recurring');
       // Codes applicatifs prioritaires (avant les codes à 4 lettres).
       for (const c of subjPrio) push(c, c, 200, false);
       for (const c of descPrio) push(c, c, descBoost ? 200 : 150, false);
@@ -332,9 +352,9 @@ export class MeetingsImportService {
         if (subjCodes.includes(c) || descCodes.includes(c)) continue;
         if (new RegExp('\\b' + c.toLowerCase() + '\\b').test(hay)) push(c, c, c.length === 4 ? 55 : 45, false);
       }
-      if (kwS) push('kw:' + this.normalize(kwS), kwS, gi.has(this.normalize(kwS)) ? 6 : 30, true);
+      if (kwS) push('kw:' + this.normalize(kwS), kwS, gi.has(this.normalize(kwS)) ? 6 : 30, true, 'keyword');
       // Mot-clé de la description : au niveau du sujet si l'objet est générique.
-      if (kwD) push('kw:' + this.normalize(kwD), kwD, gi.has(this.normalize(kwD)) ? 5 : (descBoost ? 30 : 20), true);
+      if (kwD) push('kw:' + this.normalize(kwD), kwD, gi.has(this.normalize(kwD)) ? 5 : (descBoost ? 30 : 20), true, 'keyword');
 
       // Dépriorisation des candidats génériques (y compris un code générique).
       for (const c of cands) if (gi.has(this.normalize(c.label))) c.score = Math.min(c.score, 8);
@@ -352,20 +372,12 @@ export class MeetingsImportService {
 
       if (best) {
         m.themeKey = best.key; m.themeLabel = best.label; m.themeFromFallback = best.fallback;
-        m.themeKind = this.themeKindOf(best.key);
+        m.themeKind = best.kind;
       } else {
         m.themeKey = '__nc__'; m.themeLabel = 'Non classé';
         m.themeFromFallback = true; m.themeKind = 'keyword';
       }
     }
-  }
-
-  /** Déduit l'origine d'un thème à partir de sa clé. */
-  private themeKindOf(key: string): ThemeKind {
-    if (key.startsWith('series:')) return 'recurring';
-    if (key.startsWith('theme:')) return 'defined';
-    if (key.startsWith('kw:')) return 'keyword';
-    return 'code';
   }
 
   /**
