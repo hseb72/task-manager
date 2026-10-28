@@ -18,6 +18,7 @@ const TABLES_IN_ORDER = [
   'taches',
   'actions',
   'tache_contacts',
+  'meeting_configs',
 ];
 
 /* -------------------------------------------------------------------------- */

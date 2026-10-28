@@ -4,6 +4,7 @@ import { initDatabase, seedIfEmpty } from './db/init.js';
 import tachesRouter   from './routes/taches.js';
 import refsRouter     from './routes/refs.js';
 import transferRouter from './routes/transfer.js';
+import meetingConfigsRouter from './routes/meeting-configs.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +35,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/taches', tachesRouter);
 app.use('/api/refs',   refsRouter);
+app.use('/api/meeting-configs', meetingConfigsRouter);
 app.use('/api',        transferRouter);
 
 // 404 JSON

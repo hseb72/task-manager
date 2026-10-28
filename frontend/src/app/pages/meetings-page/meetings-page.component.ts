@@ -4,16 +4,7 @@ import { FormsModule } from '@angular/forms';
 import {
   MeetingsImportService, ColKey, ColumnMap, Meeting, ThemeSynthesis, ThemeKind,
 } from '../../services/meetings-import.service';
-
-/** Paramétrage de classement sauvegardable (réutilisable d'un fichier à l'autre). */
-interface SavedConfig {
-  excluded: string;
-  aliases: string;
-  generics: string;
-  themes: string;
-  recurrenceMin: number;
-  personalTitles: string;
-}
+import { MeetingConfigsService, MeetingConfig } from '../../services/meeting-configs.service';
 
 @Component({
   selector: 'app-meetings-page',
@@ -25,8 +16,9 @@ interface SavedConfig {
 })
 export class MeetingsPageComponent {
   private svc = inject(MeetingsImportService);
+  private cfgSvc = inject(MeetingConfigsService);
 
-  constructor() { this.loadConfigs(); }
+  constructor() { this.reloadConfigs(); }
 
   step = signal<'upload' | 'map' | 'result'>('upload');
   error = signal<string | null>(null);
@@ -48,9 +40,8 @@ export class MeetingsPageComponent {
   /** Titres de réunions marquées « personnelles » (une par ligne). */
   personalTitlesText = signal<string>('');
 
-  /* Paramétrages nommés, persistés dans le navigateur (localStorage). */
-  private readonly STORE_KEY = 'meetings.configs.v1';
-  configs = signal<Record<string, SavedConfig>>({});
+  /* Paramétrages nommés, persistés en base (réutilisables d'un fichier à l'autre). */
+  configs = signal<Record<string, MeetingConfig>>({});
   configName = signal<string>('');
 
   meetings = signal<Meeting[]>([]);
@@ -180,29 +171,32 @@ export class MeetingsPageComponent {
     return Object.keys(this.configs()).sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
   }
 
-  private loadConfigs() {
-    try {
-      const raw = localStorage.getItem(this.STORE_KEY);
-      if (raw) this.configs.set(JSON.parse(raw) as Record<string, SavedConfig>);
-    } catch { /* stockage indisponible : on ignore */ }
-  }
-  private persistConfigs(obj: Record<string, SavedConfig>) {
-    this.configs.set(obj);
-    try { localStorage.setItem(this.STORE_KEY, JSON.stringify(obj)); } catch { /* ignore */ }
+  private reloadConfigs() {
+    this.cfgSvc.list().subscribe({
+      next: list => {
+        const rec: Record<string, MeetingConfig> = {};
+        for (const c of list) rec[c.name] = c.config;
+        this.configs.set(rec);
+      },
+      error: () => { /* API indisponible : on garde ce qui est en mémoire */ },
+    });
   }
 
-  private currentConfig(): SavedConfig {
+  private currentConfig(): MeetingConfig {
     return {
       excluded: this.excludedText(), aliases: this.aliasesText(), generics: this.genericsText(),
       themes: this.themesText(), recurrenceMin: this.recurrenceMin(), personalTitles: this.personalTitlesText(),
     };
   }
 
-  /** Enregistre le paramétrage courant sous le nom saisi (écrase si existant). */
+  /** Enregistre le paramétrage courant en base sous le nom saisi (écrase si existant). */
   saveConfig() {
     const name = this.configName().trim();
     if (!name) return;
-    this.persistConfigs({ ...this.configs(), [name]: this.currentConfig() });
+    this.cfgSvc.save(name, this.currentConfig()).subscribe({
+      next: () => this.reloadConfigs(),
+      error: () => this.error.set('Enregistrement du paramétrage impossible (serveur injoignable).'),
+    });
   }
 
   /** Applique un paramétrage enregistré aux champs courants. */
@@ -218,13 +212,14 @@ export class MeetingsPageComponent {
     this.personalTitlesText.set(c.personalTitles ?? '');
   }
 
-  /** Supprime le paramétrage enregistré sélectionné. */
+  /** Supprime en base le paramétrage enregistré sélectionné. */
   deleteConfig() {
     const name = this.configName().trim();
     if (!name || !this.configs()[name]) return;
-    const { [name]: _removed, ...rest } = this.configs();
-    this.persistConfigs(rest);
-    this.configName.set('');
+    this.cfgSvc.remove(name).subscribe({
+      next: () => { this.reloadConfigs(); this.configName.set(''); },
+      error: () => this.error.set('Suppression du paramétrage impossible (serveur injoignable).'),
+    });
   }
 
   /* ------------------------------------------------------------------ */

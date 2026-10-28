@@ -223,6 +223,15 @@ export async function initDatabase() {
     )
   `);
 
+  // ----- Paramétrages de synthèse des réunions (persistance des réglages) -----
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS meeting_configs (
+      name       TEXT PRIMARY KEY,
+      payload    TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+
   // Index utiles
   await db.execute('CREATE INDEX IF NOT EXISTS idx_actions_tache       ON actions(tache_id)');
   await db.execute('CREATE INDEX IF NOT EXISTS idx_taches_etat         ON taches(etat_id)');
