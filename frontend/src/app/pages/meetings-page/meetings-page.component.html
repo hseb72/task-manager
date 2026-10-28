@@ -94,6 +94,31 @@
       </div>
     </div>
 
+    <div class="mt-2">
+      <label>Thèmes définis <span class="muted" style="font-weight: normal">(expressions, souvent plusieurs mots)</span></label>
+      <textarea rows="2" [value]="themesText()" (input)="themesText.set(v($event))"
+                placeholder="Architecture technique&#10;Atelier Solution"
+                style="width: 100%; max-width: 560px; font-size: 0.82rem"></textarea>
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        Une expression par ligne. Si elle apparaît dans l'objet ou la description, elle devient le thème (prioritaire),
+        et son libellé est conservé tel quel.
+      </div>
+    </div>
+
+    <div class="mt-2">
+      <label>Séries récurrentes <span class="muted" style="font-weight: normal">(titres répétés)</span></label>
+      <div class="row gap-sm" style="align-items: center">
+        <span class="muted" style="font-size: 0.82rem">Regrouper un même titre à partir de</span>
+        <input type="number" min="0" max="99" [value]="recurrenceMin()"
+               (input)="recurrenceMin.set(+v($event))" style="width: 72px">
+        <span class="muted" style="font-size: 0.82rem">occurrences (0 = désactivé)</span>
+      </div>
+      <div class="muted mt-1" style="font-size: 0.78rem">
+        Les réunions au même titre, répétées le même jour de semaine à la même heure (cadence ~7 jours),
+        forment un thème dont le libellé est le titre complet. Le reste est classé par code ou mot-clé.
+      </div>
+    </div>
+
     @if (!subjectMapped) {
       <div class="muted mt-2" style="color: var(--danger); font-size: 0.82rem">Associez au moins la colonne « Sujet » pour continuer.</div>
     }
@@ -144,8 +169,12 @@
             <td class="muted">{{ isExpanded(t.key) ? '▾' : '▸' }}</td>
             <td>
               <strong>{{ t.label }}</strong>
-              @if (t.fromFallback) { <span class="badge" title="Déduit d'un mot-clé du sujet">mot-clé</span> }
-              @else { <span class="badge ok" title="Code détecté">code</span> }
+              @switch (t.kind) {
+                @case ('recurring') { <span class="badge rec" title="Série récurrente (titre répété)">récurrent</span> }
+                @case ('defined') { <span class="badge ok" title="Thème défini">thème</span> }
+                @case ('code') { <span class="badge ok" title="Code détecté">code</span> }
+                @default { <span class="badge" title="Déduit d'un mot-clé">mot-clé</span> }
+              }
             </td>
             <td>{{ t.count }}</td>
             <td>{{ fmt(t.totalDurationMin) }}</td>
@@ -193,7 +222,7 @@
                                   <span class="muted">(ce n'est pas un thème, ex. un nom de personne)</span>
                                 </label>
                               } @else {
-                                <div class="muted reclass-line">Thème actuel déduit d'un mot-clé : <strong>{{ m.themeLabel }}</strong></div>
+                                <div class="muted reclass-line">Thème actuel ({{ kindLabel(m.themeKind) }}) : <strong>{{ m.themeLabel }}</strong></div>
                               }
 
                               <div class="reclass-line">

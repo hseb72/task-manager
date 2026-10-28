@@ -33,7 +33,11 @@ export interface Meeting {
   themeKey: string;
   themeLabel: string;
   themeFromFallback: boolean;
+  /** Origine du thème : série récurrente, thème défini, code, ou mot-clé de repli. */
+  themeKind: ThemeKind;
 }
+
+export type ThemeKind = 'recurring' | 'defined' | 'code' | 'keyword';
 
 export interface ActorCount { actor: string; count: number; }
 
@@ -41,6 +45,7 @@ export interface ThemeSynthesis {
   key: string;
   label: string;
   fromFallback: boolean;
+  kind: ThemeKind;
   count: number;              // réunions non annulées
   cancelledCount: number;
   totalDurationMin: number;
@@ -59,6 +64,13 @@ export interface ImportOptions {
   /** Termes génériques dépriorisés (projet, infra, cadrage, démo…) : jamais
    *  gagnants face à un vrai thème, mais utilisables en dernier recours. */
   generics?: string[];
+  /** Thèmes définis par l'utilisateur, expressions (souvent multi-mots) comme
+   *  « Architecture technique » : prioritaires s'ils apparaissent dans l'objet/la
+   *  description, et conservés tels quels comme libellé. */
+  themes?: string[];
+  /** Détection des séries récurrentes : nombre minimal d'occurrences d'un même
+   *  titre pour en faire un thème (0 = désactivé, défaut DEFAULT_RECURRENCE_MIN). */
+  recurrenceMin?: number;
 }
 
 export interface ParseResult {
@@ -71,6 +83,9 @@ export interface ParseResult {
 export class MeetingsImportService {
 
   readonly DEFAULT_EXCLUDED = ['COSIT', 'COLEC', 'ITVC'];
+
+  /** Occurrences minimales d'un même titre pour constituer une série récurrente. */
+  readonly DEFAULT_RECURRENCE_MIN = 3;
 
   /** Termes génériques dépriorisés en cas de litige d'appartenance à un thème. */
   readonly DEFAULT_GENERICS = [
@@ -210,12 +225,13 @@ export class MeetingsImportService {
         id: i,
         subject, organizer, description, required, optional,
         start: date, dayISO, time, durationMin, status, cancelled, personal,
-        themeKey: '', themeLabel: '', themeFromFallback: true,
+        themeKey: '', themeLabel: '', themeFromFallback: true, themeKind: 'keyword',
       } as Meeting;
     });
 
     this.assignThemes(meetings, excluded, opts.aliases ?? [],
-      (opts.generics ?? this.DEFAULT_GENERICS));
+      (opts.generics ?? this.DEFAULT_GENERICS), opts.themes ?? [],
+      opts.recurrenceMin ?? this.DEFAULT_RECURRENCE_MIN);
     return meetings;
   }
 
@@ -238,8 +254,19 @@ export class MeetingsImportService {
   private assignThemes(
     meetings: Meeting[], excluded: Set<string>,
     aliases: { term: string; code: string }[], generics: string[],
+    themes: string[] = [], recurrenceMin = this.DEFAULT_RECURRENCE_MIN,
   ): void {
     const gi = new Set(generics.map(g => this.normalize(g)).filter(Boolean));
+
+    // --- Pré-passage : séries récurrentes (même titre répété de nombreuses fois,
+    //     typiquement le même jour de semaine à la même heure). Leur thème est le
+    //     titre complet. Les réunions classées ici sortent du reste du traitement.
+    const recurring = this.detectRecurring(meetings, recurrenceMin);
+
+    // Thèmes définis par l'utilisateur (expressions, souvent multi-mots).
+    const defined = themes
+      .map(t => ({ label: t.trim(), norm: this.normalize(t) }))
+      .filter(t => t.label && t.norm);
     const codesOf = (s: string) => (s.match(/\b[A-Z]{3,6}\b/g) ?? []).filter(t => !excluded.has(t));
     // Codes « applicatifs » prioritaires : AP + 5 chiffres, ou 1 + 6 chiffres,
     // éventuellement entre crochets (ex. [AP01234]). Les crochets sont retirés.
@@ -252,9 +279,10 @@ export class MeetingsImportService {
       return out;
     };
 
-    // Fréquence des codes sur tout le jeu (établissement du thème).
+    // Fréquence des codes sur le RESTE (hors séries récurrentes) : sert au départage.
     const freq = new Map<string, number>();
     for (const m of meetings) {
+      if (recurring.has(m.id)) continue;
       const all = [
         ...codesOf(m.subject + ' ' + m.description),
         ...priorityOf(m.subject + ' ' + m.description),
@@ -269,6 +297,7 @@ export class MeetingsImportService {
       .map(a => ({ term: this.normalize(a.term), code: a.code.toUpperCase().trim() }));
 
     for (const m of meetings) {
+      const rec = recurring.get(m.id);
       const subj = m.subject || '', desc = m.description || '';
       const hay = this.normalize(subj + ' ' + desc);
       const subjPrio = priorityOf(subj), descPrio = priorityOf(desc);
@@ -287,7 +316,12 @@ export class MeetingsImportService {
       const push = (key: string, label: string, score: number, fallback: boolean) =>
         cands.push({ key, label, score, fallback });
 
-      for (const a of normAliases) if (!excluded.has(a.code) && a.term && hay.includes(a.term)) push(a.code, a.code, 1000, false);
+      // Intention explicite de l'utilisateur (thèmes définis, alias) : au sommet,
+      // au-dessus même d'une série récurrente, pour permettre une correction.
+      for (const t of defined) if (hay.includes(t.norm)) push('theme:' + t.norm, t.label, 2000, false);
+      for (const a of normAliases) if (!excluded.has(a.code) && a.term && hay.includes(a.term)) push(a.code, a.code, 2000, false);
+      // Série récurrente : thème = titre complet, prioritaire sur les codes/mots-clés.
+      if (rec) push(rec.key, rec.label, 1500, false);
       // Codes applicatifs prioritaires (avant les codes à 4 lettres).
       for (const c of subjPrio) push(c, c, 200, false);
       for (const c of descPrio) push(c, c, descBoost ? 200 : 150, false);
@@ -316,9 +350,101 @@ export class MeetingsImportService {
         if (c.key < best.key) best = c;
       }
 
-      if (best) { m.themeKey = best.key; m.themeLabel = best.label; m.themeFromFallback = best.fallback; }
-      else { m.themeKey = '__nc__'; m.themeLabel = 'Non classé'; m.themeFromFallback = true; }
+      if (best) {
+        m.themeKey = best.key; m.themeLabel = best.label; m.themeFromFallback = best.fallback;
+        m.themeKind = this.themeKindOf(best.key);
+      } else {
+        m.themeKey = '__nc__'; m.themeLabel = 'Non classé';
+        m.themeFromFallback = true; m.themeKind = 'keyword';
+      }
     }
+  }
+
+  /** Déduit l'origine d'un thème à partir de sa clé. */
+  private themeKindOf(key: string): ThemeKind {
+    if (key.startsWith('series:')) return 'recurring';
+    if (key.startsWith('theme:')) return 'defined';
+    if (key.startsWith('kw:')) return 'keyword';
+    return 'code';
+  }
+
+  /**
+   * Repère les séries récurrentes : réunions partageant le même titre (après
+   * nettoyage léger) et répétées au moins `minOcc` fois. Un signal de cadence
+   * hebdomadaire (même jour de semaine à la même heure, ou écarts multiples de
+   * 7 jours) confirme la série quand les dates sont disponibles.
+   * Renvoie, par id de réunion, la clé et le libellé (titre complet) du thème.
+   */
+  private detectRecurring(meetings: Meeting[], minOcc: number):
+    Map<number, { key: string; label: string }> {
+    const out = new Map<number, { key: string; label: string }>();
+    if (!minOcc || minOcc < 2) return out;
+
+    const groups = new Map<string, Meeting[]>();
+    for (const m of meetings) {
+      const k = this.seriesKey(m.subject);
+      if (!k) continue;
+      (groups.get(k) ?? groups.set(k, []).get(k)!).push(m);
+    }
+
+    for (const [k, grp] of groups) {
+      if (grp.length < minOcc) continue;
+
+      const dated = grp.filter(m => m.start).sort((a, b) => a.start!.getTime() - b.start!.getTime());
+      let recurring: boolean;
+      if (dated.length >= 2) {
+        // a) même (jour de semaine, heure:minute) pour une forte majorité
+        const pair = new Map<string, number>();
+        for (const m of dated) {
+          const d = m.start!;
+          const key = `${d.getDay()}@${d.getHours()}:${d.getMinutes()}`;
+          pair.set(key, (pair.get(key) ?? 0) + 1);
+        }
+        const modal = Math.max(...pair.values());
+        const sameSlot = modal / dated.length >= 0.6;
+        // b) écarts consécutifs multiples de 7 jours (hebdo / quinzaine…)
+        let weekly = 0, gaps = 0;
+        for (let i = 1; i < dated.length; i++) {
+          const days = Math.round((dated[i]!.start!.getTime() - dated[i - 1]!.start!.getTime()) / 86400000);
+          if (days <= 0) continue;
+          gaps++;
+          if (days % 7 === 0 && days <= 56) weekly++;
+        }
+        const weeklyOk = gaps > 0 && weekly / gaps >= 0.6;
+        recurring = sameSlot || weeklyOk;
+      } else {
+        // Pas (assez) de dates : un même titre répété de nombreuses fois suffit.
+        recurring = grp.length >= minOcc;
+      }
+      if (!recurring) continue;
+
+      const label = this.representativeSubject(grp);
+      for (const m of grp) out.set(m.id, { key: 'series:' + k, label });
+    }
+    return out;
+  }
+
+  /** Clé de regroupement d'une série : titre normalisé, sans préfixe « Annulé: »
+   *  ni suffixe de variante (numéro de semaine, date). */
+  private seriesKey(subject: string): string {
+    let s = (subject || '').trim();
+    s = s.replace(/^\s*annul[eé]e?\s*:\s*/i, '');
+    s = s.replace(/[\s\-–—(#]+(semaine|sem\.?|week|wk)\s*n?°?\s*\d+\)?\s*$/i, '');
+    s = s.replace(/[\s\-–—(#]+\d{1,2}[\/.]\d{1,2}(?:[\/.]\d{2,4})?\)?\s*$/, '');
+    return this.normalize(s);
+  }
+
+  /** Titre « représentatif » d'une série : le libellé brut le plus fréquent
+   *  (préfixe « Annulé: » retiré), à défaut le premier. */
+  private representativeSubject(grp: Meeting[]): string {
+    const counts = new Map<string, number>();
+    for (const m of grp) {
+      const s = (m.subject || '').replace(/^\s*annul[eé]e?\s*:\s*/i, '').trim();
+      if (s) counts.set(s, (counts.get(s) ?? 0) + 1);
+    }
+    let best = '', bestN = -1;
+    for (const [s, n] of counts) if (n > bestN) { best = s; bestN = n; }
+    return best || (grp[0]?.subject ?? '').trim();
   }
 
   /** Découpe une cellule de participants en acteurs (noms ou e-mails). */
@@ -433,6 +559,7 @@ export class MeetingsImportService {
       let g = groups.get(m.themeKey);
       if (!g) {
         g = { key: m.themeKey, label: m.themeLabel, fromFallback: m.themeFromFallback,
+              kind: m.themeKind,
               count: 0, cancelledCount: 0, totalDurationMin: 0, topActors: [], meetings: [],
               firstStart: null, lastStart: null };
         groups.set(m.themeKey, g);

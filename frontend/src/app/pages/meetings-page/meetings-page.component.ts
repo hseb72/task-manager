@@ -2,7 +2,7 @@ import { Component, inject, signal, computed, ChangeDetectionStrategy } from '@a
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
-  MeetingsImportService, ColKey, ColumnMap, Meeting, ThemeSynthesis,
+  MeetingsImportService, ColKey, ColumnMap, Meeting, ThemeSynthesis, ThemeKind,
 } from '../../services/meetings-import.service';
 
 @Component({
@@ -29,6 +29,10 @@ export class MeetingsPageComponent {
   aliasesText = signal<string>('');
   /** Termes génériques dépriorisés (séparés par virgules/espaces). */
   genericsText = signal<string>('projet, infra, infrastructure, cadrage, démo, démonstration, atelier, point, suivi, revue, comité, chantier, dossier');
+  /** Thèmes définis (expressions multi-mots), une par ligne. */
+  themesText = signal<string>('');
+  /** Occurrences min. d'un même titre pour une série récurrente (0 = désactivé). */
+  recurrenceMin = signal<number>(3);
 
   meetings = signal<Meeting[]>([]);
   synthesis = signal<ThemeSynthesis[]>([]);
@@ -131,7 +135,10 @@ export class MeetingsPageComponent {
       return { term: (term ?? '').trim(), code: (code ?? '').trim() };
     }).filter(a => a.term && a.code);
     const generics = this.genericsText().split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
-    const ms = this.svc.buildMeetings(this.rows(), this.map(), { excluded, aliases, generics });
+    const themes = this.themesText().split(/\n+/).map(s => s.trim()).filter(Boolean);
+    const recurrenceMin = Math.max(0, Math.floor(this.recurrenceMin() || 0));
+    const ms = this.svc.buildMeetings(this.rows(), this.map(),
+      { excluded, aliases, generics, themes, recurrenceMin });
     this.meetings.set(ms);
     this.synthesis.set(this.svc.synthesize(ms));
     // On conserve les thèmes dépliés (utile lors d'un reclassement/relance).
@@ -149,8 +156,8 @@ export class MeetingsPageComponent {
   /*  Reclassement d'une réunion mal classée                             */
   /* ------------------------------------------------------------------ */
 
-  /** Code du thème courant d'une réunion (null si c'est un mot-clé de repli). */
-  codeOf(m: Meeting): string | null { return m.themeFromFallback ? null : m.themeKey; }
+  /** Code du thème courant d'une réunion (null si ce n'est pas un code). */
+  codeOf(m: Meeting): string | null { return m.themeKind === 'code' ? m.themeKey : null; }
 
   /** Mots cliquables (objet + description) proposés pour prioriser un thème. */
   words(m: Meeting): string[] { return this.svc.candidateWords(m); }
@@ -194,6 +201,9 @@ export class MeetingsPageComponent {
 
   fmt(min: number): string { return this.svc.formatDuration(min); }
   fmtDate(d: Date | null): string { return this.svc.formatDate(d); }
+  kindLabel(k: ThemeKind): string {
+    return k === 'recurring' ? 'récurrent' : k === 'defined' ? 'thème' : k === 'code' ? 'code' : 'mot-clé';
+  }
   topActorsLabel(t: ThemeSynthesis): string {
     return t.topActors.map(a => `${a.actor} (${a.count})`).join(' · ');
   }
@@ -221,7 +231,7 @@ export class MeetingsPageComponent {
     for (const t of this.synthesis()) {
       lines.push([
         t.label,
-        t.fromFallback ? 'mot-clé' : 'code',
+        this.kindLabel(t.kind),
         String(t.count),
         String(t.totalDurationMin),
         this.fmt(t.totalDurationMin),
